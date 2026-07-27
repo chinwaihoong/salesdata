@@ -188,6 +188,13 @@ describe("helpers", () => {
     expect(extractBrand("Generic Pen")).toBe("Other");
   });
 
+  it("extractBrand requires word boundaries — 'Junior' is not Uni", () => {
+    expect(extractBrand("Iwatani Windproof Camping Stove Butane Gas Junior Compact")).toBe("Iwatani");
+    expect(extractBrand("Junior Pencil Case")).toBe("Other");
+    expect(extractBrand("Uni-ball One Gel Pen")).toBe("Uni");
+    expect(extractBrand("Hi-Uni Pencil 2B")).toBe("Uni");
+  });
+
   it("sha256Hex is stable and content-sensitive", () => {
     const a = sha256Hex(Buffer.from("hello"));
     expect(a).toBe(sha256Hex(Buffer.from("hello")));

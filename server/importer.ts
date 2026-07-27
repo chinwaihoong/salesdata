@@ -49,7 +49,8 @@ export function extractBrand(productName: string): string {
   if (upper.includes("LIHIT LAB") || upper.includes("LIHITLAB") || upper.includes("LIHIT")) return "Lihit Lab";
   for (const brand of KNOWN_BRANDS) {
     if (brand === "Lihit Lab") continue;
-    if (upper.includes(brand.toUpperCase())) {
+    // Word-boundary match: a bare substring check tags e.g. "JUNIOR" as Uni
+    if (new RegExp(`\\b${brand.toUpperCase()}\\b`).test(upper)) {
       if (brand === "Mitsubishi") return "Uni";
       return brand;
     }

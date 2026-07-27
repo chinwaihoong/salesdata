@@ -59,3 +59,8 @@
 - [x] Remove Manus runtime/debug Vite plugins, template demo pages, and unused Manus helpers (LLM, maps, notifications, voice)
 - [x] Add .env.example, Dockerfile, and DEPLOY.md (Railway / Render / Fly / any Docker host)
 - [x] Auth test suite (59 tests total) + standalone boot smoke test
+
+## Static dashboard artifact (2026-07-27)
+- [x] Fix extractBrand substring bug ("Junior" tagged as Uni) with word-boundary matching + fix-brands.ts backfill script for the live DB
+- [x] Build self-contained dashboard artifact (claude.ai-hosted, no server): filters, stacked shop/platform chart, MoM/YoY trends, brand ranking, top-50 tables, light+dark
+- [x] Commit artifact template + data build script for monthly regeneration

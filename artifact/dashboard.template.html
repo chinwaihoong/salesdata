@@ -1,0 +1,763 @@
+<title>Sales Dashboard — Japan Stationery & Elite Camp</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --accent: #4f46e5;
+    --accent-ink: #ffffff;
+    --chip: #f0efec;
+    --chip-hover: #e7e6e1;
+    --s-js-shopee: #eb6834;
+    --s-js-lazada: #2a78d6;
+    --s-ec-shopee: #eda100;
+    --s-ec-lazada: #1baf7a;
+    --delta-up: #006300;
+    --delta-down: #d03b3b;
+    --row-hover: rgba(11, 11, 11, 0.03);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --accent: #8b85f0;
+      --accent-ink: #16143a;
+      --chip: #262624;
+      --chip-hover: #31312e;
+      --s-js-shopee: #d95926;
+      --s-js-lazada: #3987e5;
+      --s-ec-shopee: #c98500;
+      --s-ec-lazada: #199e70;
+      --delta-up: #0ca30c;
+      --delta-down: #e66767;
+      --row-hover: rgba(255, 255, 255, 0.04);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --accent: #8b85f0;
+    --accent-ink: #16143a;
+    --chip: #262624;
+    --chip-hover: #31312e;
+    --s-js-shopee: #d95926;
+    --s-js-lazada: #3987e5;
+    --s-ec-shopee: #c98500;
+    --s-ec-lazada: #199e70;
+    --delta-up: #0ca30c;
+    --delta-down: #e66767;
+    --row-hover: rgba(255, 255, 255, 0.04);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --accent: #4f46e5;
+    --accent-ink: #ffffff;
+    --chip: #f0efec;
+    --chip-hover: #e7e6e1;
+    --s-js-shopee: #eb6834;
+    --s-js-lazada: #2a78d6;
+    --s-ec-shopee: #eda100;
+    --s-ec-lazada: #1baf7a;
+    --delta-up: #006300;
+    --delta-down: #d03b3b;
+    --row-hover: rgba(11, 11, 11, 0.03);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 48px; }
+
+  header.page h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+  header.page p { margin: 4px 0 0; color: var(--ink-2); font-size: 13px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-top: 16px;
+  }
+  .card h2 {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); margin: 0 0 12px;
+  }
+  .card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .card-head .note { font-size: 12px; color: var(--muted); }
+
+  /* Filter bar */
+  .filters { position: sticky; top: 0; z-index: 20; background: var(--page); padding: 10px 0 2px; }
+  .filters-inner {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .chip {
+    height: 28px; padding: 0 12px; border-radius: 7px; border: none;
+    background: var(--chip); color: var(--ink-2); font-size: 12px; font-weight: 500;
+    cursor: pointer; font-family: inherit;
+  }
+  .chip:hover { background: var(--chip-hover); }
+  .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .chip:focus-visible, select:focus-visible, th.sortable:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .filter-row select {
+    height: 28px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--ink); font-size: 12px; font-family: inherit; padding: 0 6px;
+    max-width: 170px;
+  }
+  .filter-row .sep { width: 1px; height: 18px; background: var(--grid); margin: 0 4px; }
+  .filter-row label.range { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+  .filter-row input[type="month"] {
+    height: 28px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--ink); font-size: 12px; font-family: inherit; padding: 0 6px;
+  }
+
+  /* Summary strip */
+  .kpis { display: flex; flex-wrap: wrap; gap: 6px 28px; align-items: baseline; }
+  .kpi { display: flex; flex-direction: column; gap: 1px; }
+  .kpi .v { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+  .kpi .l { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); }
+  .legend span.item { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+  .toggle { display: inline-flex; background: var(--chip); border-radius: 7px; padding: 2px; }
+  .toggle button {
+    height: 24px; padding: 0 12px; border: none; border-radius: 5px; background: transparent;
+    color: var(--ink-2); font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit;
+  }
+  .toggle button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+
+  .chart-scroll { overflow-x: auto; }
+  #mainChart { display: block; }
+  #mainChart text { font-family: inherit; }
+
+  /* Tooltip */
+  .tip {
+    position: fixed; z-index: 50; pointer-events: none; display: none;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.14); padding: 8px 10px; font-size: 12px; min-width: 150px;
+  }
+  .tip .t { font-weight: 600; margin-bottom: 4px; }
+  .tip .r { display: flex; justify-content: space-between; gap: 14px; color: var(--ink-2); }
+  .tip .r b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tip .r i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 5px; }
+  .tip .total { border-top: 1px solid var(--grid); margin-top: 4px; padding-top: 4px; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th {
+    text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap;
+    position: sticky; top: 0; background: var(--surface); z-index: 1;
+  }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  tr:hover td { background: var(--row-hover); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .partial { font-size: 10.5px; color: var(--muted); font-weight: 400; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--ink-2); }
+  th.sortable .arr { font-size: 9px; }
+  .delta-up { color: var(--delta-up); font-weight: 600; }
+  .delta-down { color: var(--delta-down); font-weight: 600; }
+  .delta-na { color: var(--muted); }
+  .scroll-y { max-height: 420px; overflow-y: auto; overflow-x: auto; }
+
+  /* Brand bars */
+  .brand-row { display: grid; grid-template-columns: 110px 1fr 90px; gap: 10px; align-items: center; padding: 3px 0; }
+  .brand-row .name { font-size: 12.5px; font-weight: 500; color: var(--ink-2); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand-row .bar-track { height: 20px; position: relative; }
+  .brand-row .bar-track { display: block; }
+  .brand-row .bar {
+    display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--s-js-lazada);
+    min-width: 2px; transition: width 0.25s ease;
+  }
+  @media (prefers-reduced-motion: reduce) { .brand-row .bar { transition: none; } }
+  .brand-row .val { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  @media (max-width: 860px) { .grid-2 { grid-template-columns: 1fr; } }
+  .grid-2 .card { margin-top: 0; }
+
+  .empty { padding: 40px 0; text-align: center; color: var(--muted); font-size: 13px; }
+  footer { margin-top: 24px; color: var(--muted); font-size: 12px; text-align: center; }
+  .pname { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+
+<div class="wrap">
+  <header class="page">
+    <h1>Sales Dashboard</h1>
+    <p>Japan Stationery &amp; Elite Camp · Shopee &amp; Lazada Malaysia</p>
+  </header>
+
+  <div class="filters">
+    <div class="filters-inner">
+      <div class="filter-row" id="quickChips" role="group" aria-label="Date range presets"></div>
+      <div class="filter-row">
+        <label class="range">From <input type="month" id="fromMonth"></label>
+        <label class="range">To <input type="month" id="toMonth"></label>
+        <span class="sep"></span>
+        <select id="shopSel" aria-label="Shop">
+          <option value="all">All shops</option>
+        </select>
+        <select id="platformSel" aria-label="Platform">
+          <option value="all">All platforms</option>
+        </select>
+        <select id="brandSel" aria-label="Brand">
+          <option value="all">All brands</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="kpis" id="kpis"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>Sales by shop &amp; platform</h2>
+      <div class="toggle" role="group" aria-label="Chart period">
+        <button id="btnMonthly" aria-pressed="true">Monthly</button>
+        <button id="btnYearly" aria-pressed="false">Yearly</button>
+      </div>
+    </div>
+    <div class="legend" id="chartLegend" style="margin-bottom:10px"></div>
+    <div class="chart-scroll"><svg id="mainChart" role="img" aria-label="Stacked bar chart of sales by shop and platform over time"></svg></div>
+    <div class="empty" id="chartEmpty" hidden>No sales match the selected filters</div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>Monthly trends — MoM &amp; YoY</h2>
+      <span class="note">Full history for the selected shop / platform / brand — the date range doesn't apply here</span>
+    </div>
+    <div class="scroll-y" style="max-height:340px">
+      <table id="trendsTable">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th class="num">Sales</th>
+            <th class="num">Units</th>
+            <th class="num">vs prev month</th>
+            <th class="num">vs same month last year</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>Sales by brand</h2>
+      <span class="note" id="brandNote"></span>
+    </div>
+    <div id="brandBars"></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h2>Top 50 items by quantity</h2>
+      <div class="scroll-y">
+        <table id="topQtyTable">
+          <thead><tr>
+            <th>#</th>
+            <th class="sortable" data-k="name" tabindex="0">Product<span class="arr"></span></th>
+            <th class="sortable" data-k="brand" tabindex="0">Brand<span class="arr"></span></th>
+            <th class="num sortable" data-k="qty" tabindex="0">Qty<span class="arr"></span></th>
+            <th class="num sortable" data-k="sales" tabindex="0">Sales<span class="arr"></span></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Top 50 items by value</h2>
+      <div class="scroll-y">
+        <table id="topValTable">
+          <thead><tr>
+            <th>#</th>
+            <th class="sortable" data-k="name" tabindex="0">Product<span class="arr"></span></th>
+            <th class="sortable" data-k="brand" tabindex="0">Brand<span class="arr"></span></th>
+            <th class="num sortable" data-k="qty" tabindex="0">Qty<span class="arr"></span></th>
+            <th class="num sortable" data-k="sales" tabindex="0">Sales<span class="arr"></span></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script id="data" type="application/json">__DATA_JSON__</script>
+
+<script>
+(() => {
+  const D = JSON.parse(document.getElementById("data").textContent);
+  const { months, shops, platforms, brands, products, agg, prod } = D;
+  const latestMonth = months[months.length - 1];
+
+  // Series definitions: shop × platform. Warm = Shopee, cool = Lazada.
+  const SERIES = [
+    { shop: "Japan Stationery", platform: "Shopee", label: "JS Shopee", varName: "--s-js-shopee" },
+    { shop: "Japan Stationery", platform: "Lazada", label: "JS Lazada", varName: "--s-js-lazada" },
+    { shop: "Elite Camp", platform: "Shopee", label: "EC Shopee", varName: "--s-ec-shopee" },
+    { shop: "Elite Camp", platform: "Lazada", label: "EC Lazada", varName: "--s-ec-lazada" },
+  ];
+  const seriesColor = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+  // ---- State ----
+  const state = {
+    from: "", to: "",
+    shop: "all", platform: "all", brand: "all",
+    period: "month",
+    quick: "All time",
+    sortQty: { k: "qty", dir: -1 },
+    sortVal: { k: "sales", dir: -1 },
+  };
+
+  // ---- Formatting ----
+  const fmtRM = n => "RM " + n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtRM0 = n => n >= 1000 ? "RM " + Math.round(n / 1000).toLocaleString() + "K" : "RM " + Math.round(n);
+  const fmtInt = n => n.toLocaleString("en-MY");
+  const monthLabel = m => {
+    const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return names[parseInt(m.slice(5), 10) - 1] + " " + m.slice(0, 4);
+  };
+  const shiftMonth = (m, d) => {
+    const [y, mo] = m.split("-").map(Number);
+    const t = y * 12 + (mo - 1) + d;
+    return Math.floor(t / 12) + "-" + String((t % 12) + 1).padStart(2, "0");
+  };
+
+  // ---- Filtering ----
+  function matches(si, pi, bi) {
+    if (state.shop !== "all" && shops[si] !== state.shop) return false;
+    if (state.platform !== "all" && platforms[pi] !== state.platform) return false;
+    if (state.brand !== "all" && brands[bi] !== state.brand) return false;
+    return true;
+  }
+  const inRange = mi => {
+    const m = months[mi];
+    if (state.from && m < state.from) return false;
+    if (state.to && m > state.to) return false;
+    return true;
+  };
+
+  function filteredAgg() { return agg.filter(r => inRange(r[0]) && matches(r[1], r[2], r[3])); }
+
+  // ---- KPIs ----
+  function renderKPIs(rows) {
+    let sales = 0, qty = 0, lines = 0;
+    const monthSet = new Set();
+    for (const r of rows) { sales += r[4]; qty += r[5]; lines += r[6]; monthSet.add(r[0]); }
+    const el = document.getElementById("kpis");
+    el.innerHTML = "";
+    const items = [
+      [fmtRM(sales), "Total sales"],
+      [fmtInt(qty), "Units sold"],
+      [fmtInt(lines), "Line items"],
+      [String(monthSet.size), "Months with sales"],
+    ];
+    for (const [v, l] of items) {
+      const d = document.createElement("div");
+      d.className = "kpi";
+      d.innerHTML = `<span class="v">${v}</span><span class="l">${l}</span>`;
+      el.appendChild(d);
+    }
+  }
+
+  // ---- Main chart ----
+  const tip = document.getElementById("tip");
+  function showTip(html, x, y) {
+    tip.innerHTML = html;
+    tip.style.display = "block";
+    const r = tip.getBoundingClientRect();
+    let left = x + 14, top = y - r.height - 8;
+    if (left + r.width > window.innerWidth - 8) left = x - r.width - 14;
+    if (top < 8) top = y + 16;
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+  const hideTip = () => { tip.style.display = "none"; };
+
+  function renderChart(rows) {
+    const svg = document.getElementById("mainChart");
+    const empty = document.getElementById("chartEmpty");
+    svg.innerHTML = "";
+
+    // Group rows by period → series values
+    const byPeriod = new Map();
+    for (const r of rows) {
+      const p = state.period === "year" ? months[r[0]].slice(0, 4) : months[r[0]];
+      const shop = shops[r[1]], plat = platforms[r[2]];
+      const si = SERIES.findIndex(s => s.shop === shop && s.platform === plat);
+      if (si === -1) continue;
+      if (!byPeriod.has(p)) byPeriod.set(p, [0, 0, 0, 0]);
+      byPeriod.get(p)[si] += r[4];
+    }
+    const periods = Array.from(byPeriod.keys()).sort();
+    if (periods.length === 0) { empty.hidden = false; svg.setAttribute("height", "0"); return; }
+    empty.hidden = true;
+
+    const container = svg.parentElement.getBoundingClientRect();
+    const H = 300, padL = 52, padR = 8, padT = 10, padB = 44;
+    const minGroupW = state.period === "year" ? 70 : 34;
+    const W = Math.max(container.width || 900, padL + padR + periods.length * minGroupW);
+    svg.setAttribute("width", W);
+    svg.setAttribute("height", H);
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+
+    const maxVal = Math.max(...periods.map(p => {
+      const v = byPeriod.get(p);
+      return Math.max(v[0] + v[1], v[2] + v[3]);
+    }));
+    const niceMax = (() => {
+      const pow = Math.pow(10, Math.floor(Math.log10(maxVal || 1)));
+      for (const m of [1, 2, 2.5, 5, 10]) if (m * pow >= maxVal) return m * pow;
+      return maxVal;
+    })();
+    const y = v => padT + (H - padT - padB) * (1 - v / niceMax);
+
+    const ns = "http://www.w3.org/2000/svg";
+    const make = (tag, attrs) => {
+      const e = document.createElementNS(ns, tag);
+      for (const k in attrs) e.setAttribute(k, attrs[k]);
+      return e;
+    };
+
+    // Gridlines + y labels
+    const ticks = 5;
+    for (let i = 0; i <= ticks; i++) {
+      const v = niceMax * i / ticks;
+      const yy = y(v);
+      svg.appendChild(make("line", { x1: padL, x2: W - padR, y1: yy, y2: yy, stroke: "var(--grid)", "stroke-width": 1 }));
+      const t = make("text", { x: padL - 6, y: yy + 3.5, "text-anchor": "end", "font-size": 10, fill: "var(--muted)" });
+      t.textContent = fmtRM0(v);
+      svg.appendChild(t);
+    }
+    svg.appendChild(make("line", { x1: padL, x2: W - padR, y1: y(0), y2: y(0), stroke: "var(--baseline)", "stroke-width": 1 }));
+
+    const plotW = W - padL - padR;
+    const groupW = plotW / periods.length;
+    const barW = Math.min(20, Math.max(6, (groupW - 8) / 2 - 2));
+    const labelEvery = Math.ceil(periods.length / Math.floor(plotW / 56));
+
+    periods.forEach((p, idx) => {
+      const vals = byPeriod.get(p);
+      const cx = padL + groupW * idx + groupW / 2;
+      const stacks = [
+        { x: cx - barW - 1.5, series: [0, 1] },
+        { x: cx + 1.5, series: [2, 3] },
+      ];
+      for (const st of stacks) {
+        let acc = 0;
+        const stackTotal = st.series.reduce((s, i) => s + vals[i], 0);
+        st.series.forEach((si, pos) => {
+          const v = vals[si];
+          if (v <= 0) { acc += v; return; }
+          const y1 = y(acc + v), y0 = y(acc);
+          const isTop = pos === st.series.length - 1 || vals[st.series[st.series.length - 1]] <= 0 && pos === 0;
+          const h = Math.max(y0 - y1 - (pos > 0 ? 2 : 0), 0.75);
+          const rect = make(isTop ? "path" : "rect", {});
+          const yTop = y1, x0 = st.x;
+          if (isTop) {
+            const r = Math.min(4, barW / 2, h);
+            rect.setAttribute("d",
+              `M ${x0} ${yTop + h} L ${x0} ${yTop + r} Q ${x0} ${yTop} ${x0 + r} ${yTop} L ${x0 + barW - r} ${yTop} Q ${x0 + barW} ${yTop} ${x0 + barW} ${yTop + r} L ${x0 + barW} ${yTop + h} Z`);
+          } else {
+            rect.setAttribute("x", x0); rect.setAttribute("y", yTop);
+            rect.setAttribute("width", barW); rect.setAttribute("height", h);
+          }
+          rect.setAttribute("fill", `var(${SERIES[si].varName})`);
+          rect.addEventListener("mousemove", ev => {
+            const c = seriesColor(SERIES[si].varName);
+            showTip(
+              `<div class="t">${state.period === "year" ? p : monthLabel(p)}</div>` +
+              `<div class="r"><span><i style="background:${c}"></i>${SERIES[si].label}</span><b>${fmtRM(v)}</b></div>` +
+              `<div class="r total"><span>${SERIES[si].shop} total</span><b>${fmtRM(stackTotal)}</b></div>`,
+              ev.clientX, ev.clientY);
+          });
+          rect.addEventListener("mouseleave", hideTip);
+          svg.appendChild(rect);
+          acc += v;
+        });
+      }
+      if (idx % labelEvery === 0 || periods.length <= 14) {
+        const t = make("text", {
+          x: cx, y: H - padB + 14, "font-size": 10, fill: "var(--muted)",
+          "text-anchor": periods.length > 14 ? "end" : "middle",
+          transform: periods.length > 14 ? `rotate(-40 ${cx} ${H - padB + 14})` : "",
+        });
+        t.textContent = state.period === "year" ? p : monthLabel(p);
+        svg.appendChild(t);
+      }
+    });
+
+    // Open scrolled to the most recent periods
+    const scroller = svg.parentElement;
+    scroller.scrollLeft = scroller.scrollWidth;
+  }
+
+  function renderLegend() {
+    const el = document.getElementById("chartLegend");
+    el.innerHTML = "";
+    for (const s of SERIES) {
+      if (state.shop !== "all" && s.shop !== state.shop) continue;
+      if (state.platform !== "all" && s.platform !== state.platform) continue;
+      const span = document.createElement("span");
+      span.className = "item";
+      span.innerHTML = `<i style="background:var(${s.varName})"></i>${s.label}`;
+      el.appendChild(span);
+    }
+  }
+
+  // ---- Trends (ignores date range by design) ----
+  function renderTrends() {
+    const byMonth = new Map();
+    for (const r of agg) {
+      if (!matches(r[1], r[2], r[3])) continue;
+      const m = months[r[0]];
+      const e = byMonth.get(m) || { sales: 0, qty: 0 };
+      e.sales += r[4]; e.qty += r[5];
+      byMonth.set(m, e);
+    }
+    const keys = Array.from(byMonth.keys()).sort();
+    const pct = (cur, prev) => (prev === undefined || prev === 0) ? null : (cur - prev) / prev * 100;
+    const rows = keys.map(m => {
+      const e = byMonth.get(m);
+      return {
+        m, sales: e.sales, qty: e.qty,
+        mom: pct(e.sales, byMonth.get(shiftMonth(m, -1))?.sales),
+        yoy: pct(e.sales, byMonth.get(shiftMonth(m, -12))?.sales),
+      };
+    }).slice(-13).reverse();
+
+    const tb = document.querySelector("#trendsTable tbody");
+    tb.innerHTML = "";
+    const cell = p => p === null
+      ? `<td class="num delta-na">—</td>`
+      : `<td class="num ${p >= 0 ? "delta-up" : "delta-down"}">${p >= 0 ? "▲" : "▼"} ${Math.abs(p).toFixed(1)}%</td>`;
+    // The newest month only covers part of the month — flag it so its drop
+    // against full months isn't misread.
+    const partialMonth = D.lastDate && D.lastDate.slice(0, 7) === latestMonth && D.lastDate.slice(8) < "28"
+      ? latestMonth : null;
+    for (const r of rows) {
+      const tr = document.createElement("tr");
+      const tag = r.m === partialMonth
+        ? ` <span class="partial">(partial — to ${parseInt(D.lastDate.slice(8), 10)} ${monthLabel(r.m).slice(0, 3)})</span>` : "";
+      tr.innerHTML = `<td>${monthLabel(r.m)}${tag}</td><td class="num">${fmtRM(r.sales)}</td><td class="num">${fmtInt(r.qty)}</td>${cell(r.mom)}${cell(r.yoy)}`;
+      tb.appendChild(tr);
+    }
+  }
+
+  // ---- Brand bars ----
+  function renderBrands(rows) {
+    const byBrand = new Map();
+    for (const r of rows) {
+      const b = brands[r[3]];
+      byBrand.set(b, (byBrand.get(b) || 0) + r[4]);
+    }
+    const sorted = Array.from(byBrand.entries()).sort((a, b) => b[1] - a[1]);
+    const el = document.getElementById("brandBars");
+    el.innerHTML = "";
+    document.getElementById("brandNote").textContent = sorted.length ? `${sorted.length} brands` : "";
+    if (sorted.length === 0) { el.innerHTML = `<div class="empty">No sales match the selected filters</div>`; return; }
+    const max = sorted[0][1];
+    for (const [b, v] of sorted) {
+      const row = document.createElement("div");
+      row.className = "brand-row";
+      row.innerHTML =
+        `<span class="name" title="${b}">${b}</span>` +
+        `<span class="bar-track"><span class="bar" style="width:${Math.max(v / max * 100, 0.5)}%"></span></span>` +
+        `<span class="val">${fmtRM0(v)}</span>`;
+      row.querySelector(".bar-track").addEventListener("mousemove", ev =>
+        showTip(`<div class="t">${b}</div><div class="r"><span>Sales</span><b>${fmtRM(v)}</b></div>`, ev.clientX, ev.clientY));
+      row.querySelector(".bar-track").addEventListener("mouseleave", hideTip);
+      el.appendChild(row);
+    }
+  }
+
+  // ---- Top 50 tables ----
+  function topItems() {
+    const map = new Map();
+    for (const r of prod) {
+      if (!inRange(r[4]) || !matches(r[2], r[3], r[1])) continue;
+      const key = r[0] + "|" + r[1];
+      const e = map.get(key) || { name: products[r[0]], brand: brands[r[1]], qty: 0, sales: 0 };
+      e.qty += r[5]; e.sales += r[6];
+      map.set(key, e);
+    }
+    return Array.from(map.values());
+  }
+
+  function renderTop(tableId, items, sort) {
+    const tb = document.querySelector(`#${tableId} tbody`);
+    tb.innerHTML = "";
+    const sorted = [...items].sort((a, b) => {
+      const av = a[sort.k], bv = b[sort.k];
+      if (typeof av === "string") return av.localeCompare(bv) * -sort.dir;
+      return (av - bv) * sort.dir;
+    });
+    sorted.slice(0, 50).forEach((it, i) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        `<td class="num" style="color:var(--muted)">${i + 1}</td>` +
+        `<td><div class="pname" title="${it.name.replace(/"/g, "&quot;")}">${it.name}</div></td>` +
+        `<td style="color:var(--ink-2)">${it.brand}</td>` +
+        `<td class="num">${fmtInt(it.qty)}</td>` +
+        `<td class="num">${fmtRM(it.sales)}</td>`;
+      tb.appendChild(tr);
+    });
+    if (sorted.length === 0) tb.innerHTML = `<tr><td colspan="5" class="empty">No items match the selected filters</td></tr>`;
+    // header arrows
+    document.querySelectorAll(`#${tableId} th.sortable`).forEach(th => {
+      th.querySelector(".arr").textContent = th.dataset.k === sort.k ? (sort.dir === -1 ? " ▼" : " ▲") : "";
+    });
+  }
+
+  function renderTops() {
+    const items = topItems();
+    const byQty = [...items].sort((a, b) => b.qty - a.qty).slice(0, 50);
+    const byVal = [...items].sort((a, b) => b.sales - a.sales).slice(0, 50);
+    renderTop("topQtyTable", byQty, state.sortQty);
+    renderTop("topValTable", byVal, state.sortVal);
+  }
+
+  // ---- Filters UI ----
+  const years = Array.from(new Set(months.map(m => m.slice(0, 4)))).sort().slice(-4);
+  const QUICK = [
+    { label: "All time", from: "", to: "" },
+    ...years.map(yr => ({ label: yr, from: yr + "-01", to: yr + "-12" })),
+    { label: "Last 3 mo", from: shiftMonth(latestMonth, -2), to: latestMonth },
+    { label: "Last 6 mo", from: shiftMonth(latestMonth, -5), to: latestMonth },
+    { label: "Last 12 mo", from: shiftMonth(latestMonth, -11), to: latestMonth },
+  ];
+
+  function renderChips() {
+    const el = document.getElementById("quickChips");
+    el.innerHTML = "";
+    for (const q of QUICK) {
+      const b = document.createElement("button");
+      b.className = "chip";
+      b.textContent = q.label;
+      b.setAttribute("aria-pressed", String(state.quick === q.label));
+      b.addEventListener("click", () => {
+        state.quick = q.label; state.from = q.from; state.to = q.to;
+        document.getElementById("fromMonth").value = q.from;
+        document.getElementById("toMonth").value = q.to;
+        update();
+      });
+      el.appendChild(b);
+    }
+  }
+
+  function initSelectors() {
+    const shopSel = document.getElementById("shopSel");
+    for (const s of shops) shopSel.appendChild(new Option(s, s));
+    const platSel = document.getElementById("platformSel");
+    for (const p of platforms) platSel.appendChild(new Option(p, p));
+    const brandSel = document.getElementById("brandSel");
+    for (const b of [...brands].sort()) brandSel.appendChild(new Option(b, b));
+
+    shopSel.addEventListener("change", () => { state.shop = shopSel.value; update(); });
+    platSel.addEventListener("change", () => { state.platform = platSel.value; update(); });
+    brandSel.addEventListener("change", () => { state.brand = brandSel.value; update(); });
+
+    const fromEl = document.getElementById("fromMonth"), toEl = document.getElementById("toMonth");
+    fromEl.min = months[0]; fromEl.max = latestMonth; toEl.min = months[0]; toEl.max = latestMonth;
+    fromEl.addEventListener("change", () => { state.from = fromEl.value; state.quick = ""; renderChips(); update(); });
+    toEl.addEventListener("change", () => { state.to = toEl.value; state.quick = ""; renderChips(); update(); });
+
+    document.getElementById("btnMonthly").addEventListener("click", () => setPeriod("month"));
+    document.getElementById("btnYearly").addEventListener("click", () => setPeriod("year"));
+  }
+  function setPeriod(p) {
+    state.period = p;
+    document.getElementById("btnMonthly").setAttribute("aria-pressed", String(p === "month"));
+    document.getElementById("btnYearly").setAttribute("aria-pressed", String(p === "year"));
+    renderChart(filteredAgg());
+  }
+
+  // Sortable top-50 headers
+  function bindSort(tableId, sortKeyName) {
+    document.querySelectorAll(`#${tableId} th.sortable`).forEach(th => {
+      const activate = () => {
+        const s = state[sortKeyName];
+        if (s.k === th.dataset.k) s.dir *= -1;
+        else { s.k = th.dataset.k; s.dir = -1; }
+        renderTops();
+      };
+      th.addEventListener("click", activate);
+      th.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); } });
+    });
+  }
+
+  // ---- Update all ----
+  function update() {
+    renderChips();
+    const rows = filteredAgg();
+    renderKPIs(rows);
+    renderLegend();
+    renderChart(rows);
+    renderTrends();
+    renderBrands(rows);
+    renderTops();
+  }
+
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => renderChart(filteredAgg()), 150);
+  });
+
+  document.getElementById("foot").textContent =
+    `Snapshot of ${fmtInt(agg.reduce((s, r) => s + r[6], 0))} order line items · data through ${D.lastDate || monthLabel(latestMonth)} · generated ${D.generatedAt}`;
+
+  initSelectors();
+  bindSort("topQtyTable", "sortQty");
+  bindSort("topValTable", "sortVal");
+  update();
+})();
+</script>
