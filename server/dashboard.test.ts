@@ -37,8 +37,6 @@ vi.mock("./db", async (importOriginal) => {
     getUploadedFiles: vi.fn(),
     createUploadedFile: vi.fn(),
     updateFileStatus: vi.fn(),
-    upsertUser: vi.fn(),
-    getUserByOpenId: vi.fn(),
     getDb: vi.fn(),
   };
 });
@@ -48,7 +46,7 @@ const mockUser = {
   openId: "test-user",
   email: "test@example.com",
   name: "Test User",
-  loginMethod: "manus",
+  loginMethod: "password",
   role: "admin" as const,
   createdAt: new Date(),
   updatedAt: new Date(),

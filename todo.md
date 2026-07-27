@@ -52,3 +52,10 @@
 - [x] Monthly Trends card: month-over-month and year-over-year comparison table
 - [x] Export filtered data as Excel (Orders + Monthly/Brand/Shop-Platform summary sheets)
 - [x] Lazada/Shopee import robustness: header-based format detection (filename no longer matters), explicit quantity column support, Excel date-serial parsing, clear errors for missing columns
+
+## Manus independence (2026-07-27)
+- [x] Replace Manus OAuth with password-based admin login (ADMIN_PASSWORD + locally signed JWT session cookie)
+- [x] Make file storage optional generic S3 (or none) instead of Manus Forge proxy
+- [x] Remove Manus runtime/debug Vite plugins, template demo pages, and unused Manus helpers (LLM, maps, notifications, voice)
+- [x] Add .env.example, Dockerfile, and DEPLOY.md (Railway / Render / Fly / any Docker host)
+- [x] Auth test suite (59 tests total) + standalone boot smoke test

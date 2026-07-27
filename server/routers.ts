@@ -6,8 +6,10 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { canonicalizeBrand, shortenProductName } from "./db";
 import * as db from "./db";
-import { storagePut } from "./storage";
+import { storagePutIfConfigured } from "./storage";
 import { importExcelData, sha256Hex, OverlapError } from "./importer";
+import { checkAdminPassword, createSessionToken, isAuthConfigured } from "./auth";
+import { ONE_YEAR_MS } from "@shared/const";
 
 // Shared filter schema
 const filterSchema = z.object({
@@ -22,6 +24,23 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+    login: publicProcedure
+      .input(z.object({ password: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        if (!isAuthConfigured()) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Login is not configured: set ADMIN_PASSWORD and JWT_SECRET on the server",
+          });
+        }
+        if (!checkAdminPassword(input.password)) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Incorrect password" });
+        }
+        const token = await createSessionToken();
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        return { success: true } as const;
+      }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -167,8 +186,8 @@ export const appRouter = router({
             };
           }
 
-          // Upload file to S3
-          const { key, url } = await storagePut(
+          // Keep a copy in S3-compatible storage when configured; otherwise import directly
+          const stored = await storagePutIfConfigured(
             `uploads/${Date.now()}_${input.fileName}`,
             fileBuffer,
             input.mimeType
@@ -176,8 +195,8 @@ export const appRouter = router({
 
           // Record the uploaded file
           fileId = await db.createUploadedFile({
-            fileUrl: url,
-            fileKey: key,
+            fileUrl: stored?.url ?? '',
+            fileKey: stored?.key ?? '',
             originalName: input.fileName,
             mimeType: input.mimeType,
             fileSize: fileBuffer.length,

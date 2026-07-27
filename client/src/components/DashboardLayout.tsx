@@ -19,7 +19,6 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { LayoutDashboard, Upload, LogOut, PanelLeft } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
@@ -214,11 +213,11 @@ function DashboardLayoutContent({
               <div className="flex items-center gap-2 px-2 py-1">
                 {!isCollapsed && (
                   <Button
-                    onClick={() => startLogin()}
+                    onClick={() => setLocation("/upload")}
                     size="sm"
                     className="w-full bg-indigo-600 hover:bg-indigo-700 text-xs"
                   >
-                    Sign in
+                    Admin sign in
                   </Button>
                 )}
               </div>

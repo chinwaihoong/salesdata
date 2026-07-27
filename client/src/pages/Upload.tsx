@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 
 export default function UploadPage() {
-  const { user } = useAuth();
+  const { user, login, loggingIn } = useAuth();
+  const [password, setPassword] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<{ success: boolean; message: string } | null>(null);
@@ -106,16 +107,46 @@ export default function UploadPage() {
   };
 
   if (user?.role !== "admin") {
+    const handleLogin = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!password) return;
+      try {
+        await login(password);
+        setPassword("");
+        toast.success("Signed in");
+      } catch (error: any) {
+        toast.error(error?.message || "Login failed");
+      }
+    };
+
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Upload Data</h1>
-        <Card className="border-border/60">
-          <CardContent className="p-8 flex flex-col items-center justify-center">
-            <AlertCircle className="h-12 w-12 text-amber-500 mb-4" />
-            <h2 className="text-lg font-semibold text-slate-800">Admin Access Required</h2>
-            <p className="text-sm text-muted-foreground mt-2 text-center">
-              Only authenticated administrators can upload and import sales data files.
+        <Card className="border-border/60 max-w-md">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold text-slate-800">Admin Sign In</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              Uploading and importing sales data requires the admin password.
             </p>
+            <form onSubmit={handleLogin} className="flex gap-2">
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Admin password"
+                autoFocus
+                className="h-9 flex-1 text-sm rounded-md border border-input px-3 py-1 bg-background"
+              />
+              <Button
+                type="submit"
+                disabled={loggingIn || !password}
+                className="h-9 bg-indigo-600 hover:bg-indigo-700"
+              >
+                {loggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign in"}
+              </Button>
+            </form>
           </CardContent>
         </Card>
       </div>
