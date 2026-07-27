@@ -14,6 +14,10 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<{ success: boolean; message: string } | null>(null);
   const [shop, setShop] = useState<"Japan Stationery" | "Elite Camp">("Japan Stationery");
+  // Payload of an upload blocked by the date-overlap guard, kept so "Import Anyway" can retry it
+  const [pendingOverlap, setPendingOverlap] = useState<{
+    fileData: string; fileName: string; mimeType: string; shop: "Japan Stationery" | "Elite Camp"; message: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
 
@@ -22,11 +26,23 @@ export default function UploadPage() {
   });
 
   const importMutation = trpc.upload.importExcelFile.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       setUploading(false);
       if (data.success) {
+        setPendingOverlap(null);
         setUploadStatus({ success: true, message: data.message });
         toast.success(data.message);
+        utils.upload.getUploadedFiles.invalidate();
+      } else if ((data as any).overlap) {
+        // Blocked by the duplicate-range guard — offer an explicit override
+        setPendingOverlap({
+          fileData: variables.fileData,
+          fileName: variables.fileName,
+          mimeType: variables.mimeType,
+          shop: variables.shop,
+          message: data.message,
+        });
+        setUploadStatus(null);
         utils.upload.getUploadedFiles.invalidate();
       } else {
         setUploadStatus({ success: false, message: data.message });
@@ -39,6 +55,14 @@ export default function UploadPage() {
       toast.error("Import failed: " + error.message);
     },
   });
+
+  const confirmOverlapImport = () => {
+    if (!pendingOverlap) return;
+    setUploading(true);
+    const { message, ...payload } = pendingOverlap;
+    setPendingOverlap(null);
+    importMutation.mutate({ ...payload, allowOverlap: true });
+  };
 
   const handleFile = async (file: File) => {
     // Validate file type
@@ -53,6 +77,7 @@ export default function UploadPage() {
 
     setUploading(true);
     setUploadStatus(null);
+    setPendingOverlap(null);
 
     try {
       // Read file as base64
@@ -182,6 +207,34 @@ export default function UploadPage() {
             <div className={`mt-4 flex items-center gap-2 text-sm ${uploadStatus.success ? "text-emerald-600" : "text-red-600"}`}>
               {uploadStatus.success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
               <span>{uploadStatus.message}</span>
+            </div>
+          )}
+
+          {pendingOverlap && (
+            <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
+              <div className="flex items-start gap-2 text-sm text-amber-800">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold">Possible duplicate data</p>
+                  <p className="mt-1">{pendingOverlap.message}</p>
+                </div>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <Button
+                  onClick={confirmOverlapImport}
+                  disabled={uploading}
+                  className="h-8 bg-amber-600 hover:bg-amber-700 text-white text-xs"
+                >
+                  Import Anyway
+                </Button>
+                <Button
+                  onClick={() => setPendingOverlap(null)}
+                  variant="outline"
+                  className="h-8 text-xs"
+                >
+                  Cancel
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

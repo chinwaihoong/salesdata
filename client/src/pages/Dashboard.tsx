@@ -28,7 +28,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronUp, ChevronDown, Package, DollarSign, Calendar } from "lucide-react";
+import { ChevronUp, ChevronDown, Package, DollarSign, Calendar, Download, Loader2, TrendingUp } from "lucide-react";
+import { toast } from "sonner";
 
 type Filters = {
   startDate: string;
@@ -131,6 +132,36 @@ export default function DashboardPage() {
   const brandComp = trpc.dashboard.brandComparison.useQuery(filterInput);
   const topByQty = trpc.dashboard.topItemsByQuantity.useQuery(filterInput);
   const topByVal = trpc.dashboard.topItemsByValue.useQuery(filterInput);
+  const monthlyTrends = trpc.dashboard.monthlyTrends.useQuery(filterInput);
+  const orderMetrics = trpc.dashboard.orderMetrics.useQuery(filterInput);
+
+  const utils = trpc.useUtils();
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const result = await utils.client.dashboard.exportOrders.query(filterInput);
+      const bytes = Uint8Array.from(atob(result.base64), c => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${result.rowCount.toLocaleString()} rows`);
+    } catch (error: any) {
+      toast.error(error?.message || "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Last 12 months of trend data, newest first, for the MoM/YoY table
+  const trendRows = useMemo(() => {
+    const rows = monthlyTrends.data || [];
+    return [...rows].slice(-12).reverse();
+  }, [monthlyTrends.data]);
 
   // Transform shop+platform comparison data into grouped stacked bar format
   // Each period has 4 bars: JS_Shopee, JS_Lazada, EC_Shopee, EC_Lazada
@@ -276,6 +307,14 @@ export default function DashboardPage() {
                   <SelectItem value="Elite Camp">Elite Camp</SelectItem>
                 </SelectContent>
               </Select>
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className="h-8 px-3 text-xs font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60 transition-all flex items-center gap-1.5 sm:ml-auto"
+              >
+                {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                {exporting ? "Exporting..." : "Export Excel"}
+              </button>
             </div>
 
             {/* Quick filter buttons */}
@@ -392,6 +431,63 @@ export default function DashboardPage() {
             <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
               No data available for the selected filters
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Monthly Trends: MoM / YoY comparison (ignores date-range filter by design) */}
+      <Card className="border-border/60">
+        <CardHeader className="pb-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <CardTitle className="text-sm sm:text-base font-semibold text-slate-800 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-indigo-600" />
+              Monthly Trends (MoM / YoY)
+            </CardTitle>
+            {orderMetrics.data && orderMetrics.data.uniqueOrders > 0 && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                <span><span className="font-semibold text-slate-800">{orderMetrics.data.uniqueOrders.toLocaleString()}</span> orders</span>
+                <span>AOV <span className="font-semibold text-slate-800">RM {orderMetrics.data.avgOrderValue?.toFixed(2)}</span></span>
+                <span><span className="font-semibold text-slate-800">{orderMetrics.data.avgItemsPerOrder?.toFixed(1)}</span> items/order</span>
+                {orderMetrics.data.coveragePct < 99.5 && (
+                  <span className="text-slate-400">({orderMetrics.data.coveragePct.toFixed(0)}% of rows have order IDs)</span>
+                )}
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Uses full history for the selected shop/platform/brand — date-range filters don't apply here
+          </p>
+        </CardHeader>
+        <CardContent className="p-2 sm:p-4">
+          {monthlyTrends.isLoading ? (
+            <div className="h-48 animate-pulse bg-slate-100 rounded-lg" />
+          ) : trendRows.length > 0 ? (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/50">
+                    <TableHead className="font-semibold text-xs text-slate-600">Month</TableHead>
+                    <TableHead className="font-semibold text-xs text-slate-600 text-right">Sales</TableHead>
+                    <TableHead className="font-semibold text-xs text-slate-600 text-right">Units</TableHead>
+                    <TableHead className="font-semibold text-xs text-slate-600 text-right">vs Prev Month</TableHead>
+                    <TableHead className="font-semibold text-xs text-slate-600 text-right">vs Same Month Last Year</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {trendRows.map((row: any) => (
+                    <TableRow key={row.month} className="hover:bg-slate-50/50">
+                      <TableCell className="text-xs font-medium text-slate-800">{row.month}</TableCell>
+                      <TableCell className="text-xs text-right font-mono">{myrFormatter(row.sales)}</TableCell>
+                      <TableCell className="text-xs text-right font-mono">{row.quantity.toLocaleString()}</TableCell>
+                      <PctCell pct={row.momPct} />
+                      <PctCell pct={row.yoyPct} />
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">No data</div>
           )}
         </CardContent>
       </Card>
@@ -527,6 +623,21 @@ export default function DashboardPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+function PctCell({ pct }: { pct: number | null }) {
+  if (pct === null || pct === undefined) {
+    return <TableCell className="text-xs text-right text-slate-400">—</TableCell>;
+  }
+  const positive = pct >= 0;
+  return (
+    <TableCell className={`text-xs text-right font-mono font-medium ${positive ? "text-emerald-600" : "text-red-600"}`}>
+      <span className="inline-flex items-center gap-0.5 justify-end">
+        {positive ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        {Math.abs(pct).toFixed(1)}%
+      </span>
+    </TableCell>
   );
 }
 

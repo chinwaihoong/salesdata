@@ -1,6 +1,6 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, uploadedFiles } from "../drizzle/schema";
+import { InsertUser, InsertSalesOrder, users, uploadedFiles, salesOrders } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -359,10 +359,11 @@ export async function getDashboardOverview(filters: DashboardFilters) {
 export async function getSalesByDay(filters: DashboardFilters) {
   const { clause, params } = buildWhere(filters);
 
+  // DATE_FORMAT keeps the output a YYYY-MM-DD string now that orderDate is a real DATE column
   return await rawExecute(
-    `SELECT orderDate as date, SUM(subtotal) as sales, SUM(quantity) as quantity, COUNT(*) as orders
+    `SELECT DATE_FORMAT(orderDate, '%Y-%m-%d') as date, SUM(subtotal) as sales, SUM(quantity) as quantity, COUNT(*) as orders
      FROM sales_orders ${clause}
-     GROUP BY orderDate ORDER BY orderDate`,
+     GROUP BY date ORDER BY date`,
     params
   );
 }
@@ -371,9 +372,9 @@ export async function getSalesByWeek(filters: DashboardFilters) {
   const { clause, params } = buildWhere(filters);
 
   return await rawExecute(
-    `SELECT 
+    `SELECT
       CONCAT(DATE_FORMAT(orderDate, '%Y'), '-W', LPAD(WEEK(orderDate, 1), 2, '0')) as week,
-      MIN(orderDate) as date,
+      DATE_FORMAT(MIN(orderDate), '%Y-%m-%d') as date,
       SUM(subtotal) as sales,
       SUM(quantity) as quantity,
       COUNT(*) as orders
@@ -535,7 +536,211 @@ export async function getBrandComparison(filters: DashboardFilters) {
   }));
 }
 
+/** Previous calendar month of a YYYY-MM key, e.g. "2026-01" -> "2025-12". */
+export function shiftMonth(month: string, deltaMonths: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const total = y * 12 + (m - 1) + deltaMonths;
+  const ny = Math.floor(total / 12);
+  const nm = (total % 12) + 1;
+  return `${ny}-${String(nm).padStart(2, "0")}`;
+}
+
+/** Pure MoM/YoY computation over monthly aggregate rows (sorted by month ascending). */
+export function computeMonthlyTrends(rows: { month: string; sales: any; quantity: any; lines: any }[]) {
+  const salesByMonth = new Map<string, number>();
+  for (const row of rows) salesByMonth.set(row.month, parseFloat(row.sales) || 0);
+
+  const pctChange = (current: number, previous: number | undefined) => {
+    if (previous === undefined || previous === 0) return null;
+    return ((current - previous) / previous) * 100;
+  };
+
+  return rows.map(row => {
+    const sales = parseFloat(row.sales) || 0;
+    const prevMonthSales = salesByMonth.get(shiftMonth(row.month, -1));
+    const prevYearSales = salesByMonth.get(shiftMonth(row.month, -12));
+    return {
+      month: row.month,
+      sales,
+      quantity: Number(row.quantity) || 0,
+      lines: Number(row.lines) || 0,
+      momPct: pctChange(sales, prevMonthSales),
+      yoyPct: pctChange(sales, prevYearSales),
+      prevYearSales: prevYearSales ?? null,
+    };
+  });
+}
+
+/**
+ * Monthly sales with month-over-month and year-over-year change.
+ * Date-range filters are intentionally ignored: the comparison always uses
+ * the full history so previous months/years are available to compare against.
+ */
+export async function getMonthlyTrends(filters: DashboardFilters) {
+  const { clause, params } = buildWhere({
+    platform: filters.platform,
+    brand: filters.brand,
+    shop: filters.shop,
+  });
+
+  const rows = await rawExecute(
+    `SELECT
+      DATE_FORMAT(orderDate, '%Y-%m') as month,
+      SUM(subtotal) as sales,
+      SUM(quantity) as quantity,
+      COUNT(*) as lines
+     FROM sales_orders ${clause}
+     GROUP BY month ORDER BY month`,
+    params
+  );
+
+  return computeMonthlyTrends(rows);
+}
+
+/**
+ * Order-level metrics computed from rows that carry a platform order ID.
+ * Legacy rows imported before order-ID tracking are excluded; coveragePct
+ * tells the caller how much of the filtered data the metrics are based on.
+ */
+export async function getOrderMetrics(filters: DashboardFilters) {
+  const { clause, params } = buildWhere(filters);
+  const trackedClause = clause
+    ? `${clause} AND orderId IS NOT NULL`
+    : "WHERE orderId IS NOT NULL";
+
+  const tracked = await rawExecute(
+    `SELECT
+      COUNT(DISTINCT orderId) as uniqueOrders,
+      SUM(subtotal) as trackedSales,
+      SUM(quantity) as trackedQty,
+      COUNT(*) as trackedLines
+     FROM sales_orders ${trackedClause}`,
+    params
+  );
+
+  const totals = await rawExecute(
+    `SELECT COUNT(*) as totalLines FROM sales_orders ${clause}`,
+    params
+  );
+
+  const uniqueOrders = Number(tracked[0]?.uniqueOrders) || 0;
+  const trackedSales = parseFloat(tracked[0]?.trackedSales) || 0;
+  const trackedQty = Number(tracked[0]?.trackedQty) || 0;
+  const trackedLines = Number(tracked[0]?.trackedLines) || 0;
+  const totalLines = Number(totals[0]?.totalLines) || 0;
+
+  return {
+    uniqueOrders,
+    avgOrderValue: uniqueOrders > 0 ? trackedSales / uniqueOrders : null,
+    avgItemsPerOrder: uniqueOrders > 0 ? trackedQty / uniqueOrders : null,
+    avgLinesPerOrder: uniqueOrders > 0 ? trackedLines / uniqueOrders : null,
+    coveragePct: totalLines > 0 ? (trackedLines / totalLines) * 100 : 0,
+  };
+}
+
+/** Raw line items matching the filters, for the Excel export. */
+export async function getOrdersForExport(filters: DashboardFilters) {
+  const { clause, params } = buildWhere(filters);
+
+  return await rawExecute(
+    `SELECT
+      DATE_FORMAT(orderDate, '%Y-%m-%d') as orderDate,
+      platform, shop, brand, productName, orderId,
+      quantity, unitPrice, subtotal, sourceFile
+     FROM sales_orders ${clause}
+     ORDER BY orderDate, platform, id`,
+    params
+  );
+}
+
+// ============ Import Duplicate Protection ============
+
+/** (orderId, productName) pairs already stored for a shop/platform in a date range. */
+export async function getExistingOrderKeys(platform: string, shop: string, minDate: string, maxDate: string) {
+  return await rawExecute(
+    `SELECT orderId, productName FROM sales_orders
+     WHERE platform = ? AND shop = ? AND orderDate >= ? AND orderDate <= ? AND orderId IS NOT NULL`,
+    [platform, shop, minDate, maxDate]
+  ) as { orderId: string; productName: string }[];
+}
+
+/**
+ * Rows in the date range imported without an order ID (from another file).
+ * These cannot be deduplicated automatically, so re-importing over them risks double counting.
+ */
+export async function countLegacyRowsInRange(platform: string, shop: string, minDate: string, maxDate: string, excludeSourceFile: string) {
+  const rows = await rawExecute(
+    `SELECT COUNT(*) as cnt FROM sales_orders
+     WHERE platform = ? AND shop = ? AND orderDate >= ? AND orderDate <= ?
+       AND orderId IS NULL AND sourceFile != ?`,
+    [platform, shop, minDate, maxDate, excludeSourceFile]
+  );
+  return Number(rows[0]?.cnt) || 0;
+}
+
+export async function insertSalesOrders(orders: {
+  platform: "Shopee" | "Lazada";
+  shop: string;
+  orderDate: string;
+  orderId: string | null;
+  productName: string;
+  brand: string;
+  unitPrice: number;
+  quantity: number;
+  subtotal: number;
+  sourceFile: string;
+}[]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const values: InsertSalesOrder[] = orders.map(o => ({
+    platform: o.platform,
+    shop: o.shop as "Japan Stationery" | "Elite Camp",
+    orderDate: o.orderDate,
+    orderId: o.orderId,
+    productName: o.productName,
+    brand: o.brand,
+    unitPrice: o.unitPrice.toFixed(2),
+    quantity: o.quantity,
+    subtotal: o.subtotal.toFixed(2),
+    sourceFile: o.sourceFile,
+  }));
+
+  const batchSize = 200;
+  for (let i = 0; i < values.length; i += batchSize) {
+    await db.insert(salesOrders).values(values.slice(i, i + batchSize));
+  }
+}
+
 // ============ File Upload & Import Queries ============
+
+/** Most recent successfully imported upload with the same content hash, if any. */
+export async function getImportedFileByHash(fileHash: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const rows = await db.select().from(uploadedFiles)
+    .where(and(eq(uploadedFiles.fileHash, fileHash), eq(uploadedFiles.importStatus, "imported")))
+    .orderBy(sql`${uploadedFiles.uploadedAt} DESC`)
+    .limit(1);
+  return rows[0];
+}
+
+/** Most recent successfully imported upload with the same original filename for a shop, if any. */
+export async function getImportedFileByName(originalName: string, shop: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const rows = await db.select().from(uploadedFiles)
+    .where(and(
+      eq(uploadedFiles.originalName, originalName),
+      eq(uploadedFiles.shop, shop as "Japan Stationery" | "Elite Camp"),
+      eq(uploadedFiles.importStatus, "imported"),
+    ))
+    .orderBy(sql`${uploadedFiles.uploadedAt} DESC`)
+    .limit(1);
+  return rows[0];
+}
 
 export async function createUploadedFile(file: {
   fileUrl: string;
@@ -545,6 +750,7 @@ export async function createUploadedFile(file: {
   fileSize: number;
   uploadedBy: number;
   shop: string;
+  fileHash?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error('Database not available');
@@ -557,6 +763,7 @@ export async function createUploadedFile(file: {
     fileSize: file.fileSize,
     uploadedBy: file.uploadedBy,
     shop: file.shop as 'Japan Stationery' | 'Elite Camp',
+    fileHash: file.fileHash,
     importStatus: 'pending',
   });
 

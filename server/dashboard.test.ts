@@ -5,7 +5,12 @@ import * as db from "./db";
 
 // Import the pure helper functions directly (they are exported from db.ts but the module is mocked)
 // We need to import them before the mock, or use a separate import path
-import { shortenProductName as _shortenProductName, canonicalizeBrand as _canonicalizeBrand } from "./db";
+import {
+  shortenProductName as _shortenProductName,
+  canonicalizeBrand as _canonicalizeBrand,
+  computeMonthlyTrends as _computeMonthlyTrends,
+  shiftMonth as _shiftMonth,
+} from "./db";
 
 // Mock the database module
 vi.mock("./db", async (importOriginal) => {
@@ -24,6 +29,11 @@ vi.mock("./db", async (importOriginal) => {
     getBrandComparison: vi.fn(),
     getTopItemsByQuantity: vi.fn(),
     getTopItemsByValue: vi.fn(),
+    getMonthlyTrends: vi.fn(),
+    getOrderMetrics: vi.fn(),
+    getOrdersForExport: vi.fn(),
+    getImportedFileByHash: vi.fn(),
+    getImportedFileByName: vi.fn(),
     getUploadedFiles: vi.fn(),
     createUploadedFile: vi.fn(),
     updateFileStatus: vi.fn(),
@@ -227,6 +237,68 @@ describe("dashboard API", () => {
     expect(result[2].shop).toBe("Elite Camp");
   });
 
+  it("returns monthly trends with MoM and YoY change", async () => {
+    const mockData = [
+      { month: "2025-06", sales: 10000, quantity: 100, lines: 80, momPct: null, yoyPct: null, prevYearSales: null },
+      { month: "2025-07", sales: 12000, quantity: 120, lines: 95, momPct: 20, yoyPct: null, prevYearSales: null },
+      { month: "2026-07", sales: 15000, quantity: 150, lines: 110, momPct: 5, yoyPct: 25, prevYearSales: 12000 },
+    ];
+    (db.getMonthlyTrends as any).mockResolvedValue(mockData);
+
+    const caller = appRouter.createCaller(mockContext);
+    const result = await caller.dashboard.monthlyTrends({ shop: "Japan Stationery" });
+
+    expect(result).toHaveLength(3);
+    expect(result[2].yoyPct).toBe(25);
+    expect(db.getMonthlyTrends).toHaveBeenCalledWith({ shop: "Japan Stationery" });
+  });
+
+  it("returns order metrics with coverage", async () => {
+    (db.getOrderMetrics as any).mockResolvedValue({
+      uniqueOrders: 500,
+      avgOrderValue: 45.5,
+      avgItemsPerOrder: 2.3,
+      avgLinesPerOrder: 1.4,
+      coveragePct: 12.5,
+    });
+
+    const caller = appRouter.createCaller(mockContext);
+    const result = await caller.dashboard.orderMetrics({});
+
+    expect(result.uniqueOrders).toBe(500);
+    expect(result.avgOrderValue).toBe(45.5);
+    expect(result.coveragePct).toBe(12.5);
+  });
+
+  it("exports filtered orders as an Excel workbook with summary sheets", async () => {
+    (db.getOrdersForExport as any).mockResolvedValue([
+      { orderDate: "2025-06-15", platform: "Shopee", shop: "Japan Stationery", brand: "Pentel", productName: "Graph Gear 500", orderId: "A1", quantity: 2, unitPrice: "29.90", subtotal: "59.80", sourceFile: "Order.all.x.xlsx" },
+      { orderDate: "2025-07-01", platform: "Lazada", shop: "Japan Stationery", brand: "Mitsubishi", productName: "Hi-Uni Pencil", orderId: null, quantity: 1, unitPrice: "5.00", subtotal: "5.00", sourceFile: "laz.xlsx" },
+    ]);
+
+    const caller = appRouter.createCaller(mockContext);
+    const result = await caller.dashboard.exportOrders({ shop: "Japan Stationery" });
+
+    expect(result.rowCount).toBe(2);
+    expect(result.fileName).toContain("Japan-Stationery");
+
+    const XLSX = await import("xlsx");
+    const wb = XLSX.read(Buffer.from(result.base64, "base64"), { type: "buffer" });
+    expect(wb.SheetNames).toEqual(["Orders", "Monthly Summary", "Brand Summary", "Shop-Platform Summary"]);
+    const orders = XLSX.utils.sheet_to_json(wb.Sheets["Orders"]) as any[];
+    expect(orders).toHaveLength(2);
+    // Brand canonicalization applies in the export too
+    expect(orders[1]["Brand"]).toBe("Uni");
+    const monthly = XLSX.utils.sheet_to_json(wb.Sheets["Monthly Summary"]) as any[];
+    expect(monthly.map(m => m["Month"])).toEqual(["2025-06", "2025-07"]);
+  });
+
+  it("rejects export when no rows match", async () => {
+    (db.getOrdersForExport as any).mockResolvedValue([]);
+    const caller = appRouter.createCaller(mockContext);
+    await expect(caller.dashboard.exportOrders({})).rejects.toThrow(/No orders match/);
+  });
+
   it("returns yearly shop platform comparison data", async () => {
     const mockData = [
       { period: "2024", shop: "Japan Stationery", platform: "Shopee", sales: 600000, quantity: 7200 },
@@ -279,6 +351,83 @@ describe("upload API", () => {
       fileName: "Order.all.test.xlsx",
       mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     } as any)).rejects.toThrow();
+  });
+
+  it("rejects a file whose content hash was already imported", async () => {
+    (db.getImportedFileByHash as any).mockResolvedValue({
+      id: 7,
+      originalName: "Order.all.20260601_20260630.xlsx",
+      uploadedAt: new Date("2026-07-01"),
+      ordersImported: 850,
+    });
+
+    const caller = appRouter.createCaller(mockContext);
+    const result = await caller.upload.importExcelFile({
+      fileData: Buffer.from("same content").toString("base64"),
+      fileName: "renamed-copy.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      shop: "Japan Stationery",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("already imported");
+    expect(db.createUploadedFile).not.toHaveBeenCalled();
+  });
+
+  it("rejects a filename already imported for the same shop", async () => {
+    (db.getImportedFileByHash as any).mockResolvedValue(undefined);
+    (db.getImportedFileByName as any).mockResolvedValue({
+      id: 8,
+      originalName: "Order.all.20260601_20260630.xlsx",
+      uploadedAt: new Date("2026-07-01"),
+    });
+
+    const caller = appRouter.createCaller(mockContext);
+    const result = await caller.upload.importExcelFile({
+      fileData: Buffer.from("different content").toString("base64"),
+      fileName: "Order.all.20260601_20260630.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      shop: "Japan Stationery",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("already imported");
+    expect(db.createUploadedFile).not.toHaveBeenCalled();
+  });
+});
+
+describe("computeMonthlyTrends", () => {
+  it("computes MoM against the previous calendar month, not the previous row", () => {
+    // Gap: no 2025-06 data, so 2025-07 has no MoM comparison
+    const rows = [
+      { month: "2025-05", sales: 1000, quantity: 10, lines: 8 },
+      { month: "2025-07", sales: 1200, quantity: 12, lines: 9 },
+      { month: "2025-08", sales: 600, quantity: 6, lines: 5 },
+    ];
+    const result = _computeMonthlyTrends(rows);
+    expect(result[0].momPct).toBeNull();
+    expect(result[1].momPct).toBeNull(); // 2025-06 missing
+    expect(result[2].momPct).toBeCloseTo(-50);
+  });
+
+  it("computes YoY across years including the December -> January boundary", () => {
+    const rows = [
+      { month: "2024-12", sales: 2000, quantity: 20, lines: 15 },
+      { month: "2025-01", sales: 1000, quantity: 10, lines: 8 },
+      { month: "2025-12", sales: 3000, quantity: 30, lines: 22 },
+      { month: "2026-01", sales: 1500, quantity: 15, lines: 11 },
+    ];
+    const result = _computeMonthlyTrends(rows);
+    expect(result[2].yoyPct).toBeCloseTo(50); // 3000 vs 2000
+    expect(result[3].yoyPct).toBeCloseTo(50); // 1500 vs 1000
+    expect(result[3].momPct).toBeCloseTo(-50); // 1500 vs 3000
+    expect(result[3].prevYearSales).toBe(1000);
+  });
+
+  it("shiftMonth handles year boundaries", () => {
+    expect(_shiftMonth("2026-01", -1)).toBe("2025-12");
+    expect(_shiftMonth("2026-01", -12)).toBe("2025-01");
+    expect(_shiftMonth("2025-12", -12)).toBe("2024-12");
   });
 });
 describe("shortenProductName", () => {

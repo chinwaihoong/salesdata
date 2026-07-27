@@ -43,3 +43,12 @@
 - [x] Add a required shop selector and shop history column to the admin upload page
 - [x] Extend automated tests for shop filters, grouped platform data, and upload attribution
 - [x] Verify, checkpoint, and redeploy the two-shop dashboard
+
+## Round 2 improvements (2026-07-27)
+- [x] Duplicate-import protection: SHA-256 file hash + filename checks, row-level (orderId, product) dedup, date-overlap guard with "Import Anyway" override
+- [x] Convert orderDate to a real DATE column with indexes (orderDate, shop+platform+date, brand, orderId) — migration 0003
+- [x] Capture platform order IDs (Shopee Order ID / Lazada orderNumber) on import
+- [x] Order-level metrics API + UI: unique orders, average order value, items per order, with coverage indicator
+- [x] Monthly Trends card: month-over-month and year-over-year comparison table
+- [x] Export filtered data as Excel (Orders + Monthly/Brand/Shop-Platform summary sheets)
+- [x] Lazada/Shopee import robustness: header-based format detection (filename no longer matters), explicit quantity column support, Excel date-serial parsing, clear errors for missing columns

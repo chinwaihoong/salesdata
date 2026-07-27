@@ -7,6 +7,7 @@ import { TRPCError } from "@trpc/server";
 import { canonicalizeBrand, shortenProductName } from "./db";
 import * as db from "./db";
 import { storagePut } from "./storage";
+import { importExcelData, sha256Hex, OverlapError } from "./importer";
 
 // Shared filter schema
 const filterSchema = z.object({
@@ -104,6 +105,29 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return await db.getTopItemsByValue(input, 50);
       }),
+
+    monthlyTrends: publicProcedure
+      .input(filterSchema)
+      .query(async ({ input }) => {
+        return await db.getMonthlyTrends(input);
+      }),
+
+    orderMetrics: publicProcedure
+      .input(filterSchema)
+      .query(async ({ input }) => {
+        return await db.getOrderMetrics(input);
+      }),
+
+    exportOrders: publicProcedure
+      .input(filterSchema)
+      .query(async ({ input }) => {
+        const rows = await db.getOrdersForExport(input);
+        if (rows.length === 0) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "No orders match the selected filters" });
+        }
+        const { fileName, base64 } = await buildExportWorkbook(rows, input);
+        return { fileName, base64, rowCount: rows.length };
+      }),
   }),
 
   upload: router({
@@ -118,12 +142,32 @@ export const appRouter = router({
         fileName: z.string(),
         mimeType: z.string(),
         shop: z.enum(["Japan Stationery", "Elite Camp"]),
+        /** Proceed even when the date range overlaps legacy rows without order IDs */
+        allowOverlap: z.boolean().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         let fileId = 0;
         try {
-          // Upload file to S3
           const fileBuffer = Buffer.from(input.fileData, 'base64');
+          const fileHash = sha256Hex(fileBuffer);
+
+          // Reject exact duplicates before touching storage or the orders table
+          const sameHash = await db.getImportedFileByHash(fileHash);
+          if (sameHash) {
+            return {
+              success: false,
+              message: `This exact file was already imported on ${new Date(sameHash.uploadedAt).toLocaleDateString('en-MY')} as "${sameHash.originalName}" (${sameHash.ordersImported?.toLocaleString() || 0} orders). Nothing was imported.`,
+            };
+          }
+          const sameName = await db.getImportedFileByName(input.fileName, input.shop);
+          if (sameName) {
+            return {
+              success: false,
+              message: `A file named "${input.fileName}" was already imported for ${input.shop} on ${new Date(sameName.uploadedAt).toLocaleDateString('en-MY')}. If this is a corrected re-export, rename the file to make that explicit before uploading.`,
+            };
+          }
+
+          // Upload file to S3
           const { key, url } = await storagePut(
             `uploads/${Date.now()}_${input.fileName}`,
             fileBuffer,
@@ -139,22 +183,29 @@ export const appRouter = router({
             fileSize: fileBuffer.length,
             uploadedBy: ctx.user.id,
             shop: input.shop,
+            fileHash,
           });
 
           // Update status to importing
           await db.updateFileStatus(fileId, 'importing');
 
-          // Parse and import the Excel file
-          const importResult = await importExcelData(fileBuffer, input.fileName, input.shop);
+          // Parse and import the Excel file (with row-level duplicate detection)
+          const importResult = await importExcelData(fileBuffer, input.fileName, input.shop, {
+            allowOverlap: input.allowOverlap,
+          });
 
           // Update status to imported
           await db.updateFileStatus(fileId, 'imported', undefined, importResult.ordersImported);
 
+          const skippedNote = importResult.duplicatesSkipped > 0
+            ? ` (${importResult.duplicatesSkipped.toLocaleString()} duplicate row(s) skipped)`
+            : '';
           return {
             success: true,
             fileId,
             ordersImported: importResult.ordersImported,
-            message: `Successfully imported ${importResult.ordersImported} orders from ${input.fileName}`,
+            duplicatesSkipped: importResult.duplicatesSkipped,
+            message: `Successfully imported ${importResult.ordersImported.toLocaleString()} orders from ${input.fileName}${skippedNote}`,
           };
         } catch (error: any) {
           console.error('[Upload] Import failed:', error);
@@ -166,6 +217,7 @@ export const appRouter = router({
           }
           return {
             success: false,
+            overlap: error instanceof OverlapError,
             message: error.message || 'Failed to import file',
           };
         }
@@ -173,169 +225,69 @@ export const appRouter = router({
   }),
 });
 
-function extractBrand(productName: string): string {
-  if (!productName) return 'Other';
-  const KNOWN_BRANDS = [
-    'Uni', 'Zebra', 'Pentel', 'Staedtler', 'Rotring', 'Platinum',
-    'DOD', 'Iwatani', 'Olight', 'Kokuyo', 'Pilot', 'Lihit Lab',
-    'Tombow', 'Sakura', 'Kuretake', 'Mitsubishi'
-  ];
-  const upper = productName.toUpperCase();
-  if (upper.includes('LIHIT LAB') || upper.includes('LIHITLAB') || upper.includes('LIHIT')) return 'Lihit Lab';
-  for (const brand of KNOWN_BRANDS) {
-    if (brand === 'Lihit Lab') continue;
-    if (upper.includes(brand.toUpperCase())) return brand;
-  }
-  if (upper.includes('UNI-BALL') || upper.includes('UNIBALL')) return 'Uni';
-  if (upper.includes('MITSUBISHI')) return 'Uni'; // Unify Mitsubishi under Uni
-  return 'Other';
-}
-
-async function importExcelData(fileBuffer: Buffer, fileName: string, shop: string): Promise<{ ordersImported: number }> {
+async function buildExportWorkbook(
+  rows: any[],
+  filters: { startDate?: string; endDate?: string; platform?: string; brand?: string; shop?: string }
+): Promise<{ fileName: string; base64: string }> {
   const XLSX = await import('xlsx');
 
-  const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-  const sheetNames = workbook.SheetNames;
+  const orderSheetRows = rows.map((r: any) => ({
+    'Date': r.orderDate,
+    'Platform': r.platform,
+    'Shop': r.shop,
+    'Brand': canonicalizeBrand(r.brand),
+    'Product': r.productName,
+    'Order ID': r.orderId || '',
+    'Qty': Number(r.quantity) || 0,
+    'Unit Price (RM)': parseFloat(r.unitPrice) || 0,
+    'Subtotal (RM)': parseFloat(r.subtotal) || 0,
+    'Source File': r.sourceFile,
+  }));
 
-  // Detect platform from filename
-  const isShopee = fileName.startsWith('Order.all.');
-  let orders: any[] = [];
-
-  if (isShopee) {
-    // Shopee format
-    const sheet = workbook.Sheets['orders'];
-    if (!sheet) throw new Error('Shopee file missing "orders" sheet');
-    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-    if (rows.length < 2) return { ordersImported: 0 };
-
-    const header = rows[0];
-    const statusIdx = header.indexOf('Order Status');
-    const dateIdx = header.indexOf('Order Creation Date');
-    const productIdx = header.indexOf('Product Name');
-    const dealPriceIdx = header.indexOf('Deal Price');
-    const quantityIdx = header.indexOf('Quantity');
-    const subtotalIdx = header.indexOf('Product Subtotal');
-
-    for (let i = 1; i < rows.length; i++) {
-      const row = rows[i];
-      if (!row || !row[statusIdx]) continue;
-      const status = String(row[statusIdx]).trim();
-      if (status !== 'Completed') continue;
-
-      const dateStr = String(row[dateIdx] || '').trim();
-      const dateMatch = dateStr.match(/(\d{4}-\d{2}-\d{2})/);
-      if (!dateMatch) continue;
-
-      const productName = String(row[productIdx] || '').trim();
-      const brand = extractBrand(productName);
-      const unitPrice = parseFloat(row[dealPriceIdx]) || 0;
-      const quantity = parseInt(row[quantityIdx], 10) || 1;
-      const subtotal = parseFloat(row[subtotalIdx]) || 0;
-
-      if (productName && unitPrice > 0) {
-        orders.push({
-          platform: 'Shopee',
-          shop,
-          orderDate: dateMatch[1],
-          productName,
-          brand,
-          unitPrice,
-          quantity,
-          subtotal,
-          sourceFile: fileName,
-        });
-      }
+  const summarize = (keyFn: (r: any) => string) => {
+    const map = new Map<string, { sales: number; qty: number; lines: number }>();
+    for (const r of rows) {
+      const key = keyFn(r);
+      const entry = map.get(key) || { sales: 0, qty: 0, lines: 0 };
+      entry.sales += parseFloat(r.subtotal) || 0;
+      entry.qty += Number(r.quantity) || 0;
+      entry.lines += 1;
+      map.set(key, entry);
     }
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  };
+
+  const monthlyRows = summarize(r => String(r.orderDate).slice(0, 7)).map(([month, s]) => ({
+    'Month': month, 'Sales (RM)': Math.round(s.sales * 100) / 100, 'Qty': s.qty, 'Lines': s.lines,
+  }));
+  const brandRows = summarize(r => canonicalizeBrand(r.brand))
+    .sort((a, b) => b[1].sales - a[1].sales)
+    .map(([brand, s]) => ({
+      'Brand': brand, 'Sales (RM)': Math.round(s.sales * 100) / 100, 'Qty': s.qty, 'Lines': s.lines,
+    }));
+  const platformRows = summarize(r => `${r.shop} / ${r.platform}`).map(([key, s]) => ({
+    'Shop / Platform': key, 'Sales (RM)': Math.round(s.sales * 100) / 100, 'Qty': s.qty, 'Lines': s.lines,
+  }));
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(orderSheetRows), 'Orders');
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(monthlyRows), 'Monthly Summary');
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(brandRows), 'Brand Summary');
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(platformRows), 'Shop-Platform Summary');
+
+  const parts = ['sales-export'];
+  if (filters.shop && filters.shop !== 'all') parts.push(filters.shop.replace(/\s+/g, '-'));
+  if (filters.platform && filters.platform !== 'all') parts.push(filters.platform);
+  if (filters.brand && filters.brand !== 'all') parts.push(filters.brand.replace(/\s+/g, '-'));
+  if (filters.startDate || filters.endDate) {
+    parts.push(`${filters.startDate || 'start'}_to_${filters.endDate || 'now'}`);
   } else {
-    // Lazada format
-    const sheet = workbook.Sheets[sheetNames[0]];
-    if (!sheet) throw new Error('Lazada file has no data sheet');
-    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-    if (rows.length < 2) return { ordersImported: 0 };
-
-    const header = rows[0];
-    const createTimeIdx = header.indexOf('createTime');
-    const itemNameIdx = header.indexOf('itemName');
-    const paidPriceIdx = header.indexOf('paidPrice');
-    const statusIdx = header.indexOf('status');
-
-    for (let i = 1; i < rows.length; i++) {
-      const row = rows[i];
-      if (!row) continue;
-      const status = String(row[statusIdx] || '').trim().toLowerCase();
-      if (status !== 'confirmed') continue;
-
-      const createTimeStr = String(row[createTimeIdx] || '').trim();
-      let orderDate = '';
-      const dateMatch = createTimeStr.match(/(\d{4}-\d{2}-\d{2})/);
-      if (dateMatch) {
-        orderDate = dateMatch[1];
-      } else {
-        const parts = createTimeStr.split(' ');
-        if (parts.length >= 3) {
-          const months: Record<string, string> = {
-            jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
-            jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12'
-          };
-          const day = parts[0].padStart(2, '0');
-          const month = months[parts[1].toLowerCase()];
-          const year = parts[2];
-          if (month && year) orderDate = `${year}-${month}-${day}`;
-        }
-      }
-      if (!orderDate) continue;
-
-      const itemName = String(row[itemNameIdx] || '').trim();
-      const brand = extractBrand(itemName);
-      const paidPrice = parseFloat(row[paidPriceIdx]) || 0;
-
-      if (itemName && paidPrice > 0) {
-        orders.push({
-          platform: 'Lazada',
-          shop,
-          orderDate,
-          productName: itemName,
-          brand,
-          unitPrice: paidPrice,
-          quantity: 1,
-          subtotal: paidPrice,
-          sourceFile: fileName,
-        });
-      }
-    }
+    parts.push('all-time');
   }
+  const fileName = `${parts.join('_')}.xlsx`;
 
-  if (orders.length === 0) {
-    throw new Error('No valid orders found in the file');
-  }
-
-  // Insert into database in batches
-  const batchSize = 200;
-  const mysql = await import('mysql2/promise');
-  const conn = await mysql.createConnection({
-    uri: process.env.DATABASE_URL!,
-    connectTimeout: 30000,
-    ssl: { rejectUnauthorized: true },
-  });
-
-  try {
-    for (let i = 0; i < orders.length; i += batchSize) {
-      const batch = orders.slice(i, i + batchSize);
-      const placeholders = batch.map(() => '(?,?,?,?,?,?,?,?,?)').join(',');
-      const values: any[] = [];
-      for (const o of batch) {
-        values.push(o.platform, o.shop, o.orderDate, o.productName, o.brand, o.unitPrice, o.quantity, o.subtotal, o.sourceFile);
-      }
-      await conn.execute(
-        `INSERT INTO sales_orders (platform, shop, orderDate, productName, brand, unitPrice, quantity, subtotal, sourceFile) VALUES ${placeholders}`,
-        values
-      );
-    }
-  } finally {
-    await conn.end();
-  }
-
-  return { ordersImported: orders.length };
+  const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+  return { fileName, base64: buffer.toString('base64') };
 }
 
 export type AppRouter = typeof appRouter;

@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, bigint } from "drizzle-orm/mysql-core";
+import { date, index, int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, bigint } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -34,8 +34,10 @@ export const salesOrders = mysqlTable("sales_orders", {
   platform: mysqlEnum("platform", ["Shopee", "Lazada"]).notNull(),
   /** Shop that owns the order data */
   shop: mysqlEnum("shop", ["Japan Stationery", "Elite Camp"]).default("Japan Stationery").notNull(),
-  /** Order creation date as a string (YYYY-MM-DD) */
-  orderDate: varchar("orderDate", { length: 10 }).notNull(),
+  /** Order creation date (YYYY-MM-DD). Real DATE column; drizzle returns it as a string. */
+  orderDate: date("orderDate", { mode: "string" }).notNull(),
+  /** Platform order number (Shopee Order ID / Lazada orderNumber). Null for legacy rows imported before this column existed. */
+  orderId: varchar("orderId", { length: 64 }),
   /** Product name */
   productName: text("productName").notNull(),
   /** Extracted brand from product name */
@@ -50,7 +52,12 @@ export const salesOrders = mysqlTable("sales_orders", {
   sourceFile: varchar("sourceFile", { length: 500 }).notNull(),
   /** Timestamp when this record was imported */
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_sales_orderDate").on(table.orderDate),
+  index("idx_sales_shop_platform_date").on(table.shop, table.platform, table.orderDate),
+  index("idx_sales_brand").on(table.brand),
+  index("idx_sales_orderId").on(table.orderId),
+]);
 
 export type SalesOrder = typeof salesOrders.$inferSelect;
 export type InsertSalesOrder = typeof salesOrders.$inferInsert;
@@ -70,6 +77,8 @@ export const uploadedFiles = mysqlTable("uploaded_files", {
   mimeType: varchar("mimeType", { length: 100 }).notNull(),
   /** File size in bytes */
   fileSize: bigint("fileSize", { mode: "number" }).notNull(),
+  /** SHA-256 hex digest of the file contents, used to reject duplicate imports */
+  fileHash: varchar("fileHash", { length: 64 }),
   /** Upload timestamp */
   uploadedAt: timestamp("uploadedAt").defaultNow().notNull(),
   /** Uploaded by user ID */
