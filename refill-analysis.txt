@@ -1,0 +1,67 @@
+Refill Product Name Patterns Found in Database:
+
+1. "Uni Mitsubishi Mechanical Pencil Refill Leads 0.3/0.4/0.5/0.7/0.9 mm UL-S-0.3-25 1P"
+   → Should become: "Uni Mechanical Pencil Refill Leads UL-S-0.3-25"
+
+2. "Refill for Tombow Airpress Pressurized Ballpoint Pen - 0.7 mm"
+   → Should become: "Tombow Airpress Refill"
+
+3. "KOKUYO Dotliner Glue Tape Standard, Long, Hold, Long50, Power (refill or tape set) TA-DM400-08N D400-08N"
+   → Should become: "Kokuyo Dotliner Glue Tape Refill TA-DM400"
+
+4. "Refill for Mitsubishi Multi Function Jetstream Pen SXR-80-05 (0.5mm)"
+   → Should become: "Uni Jetstream Refill SXR-80-05"
+
+5. "Uniball Refill for Mitsubishi Multi Function Jetstream Pen SXR-80-07 (0.7mm)"
+   → Should become: "Uni Jetstream Refill SXR-80-07"
+
+6. "Refill for Mitsubishi Multi Function Jetstream Pen SXR-600-05 (0.5mm) and SXR-600-07 (0.7mm) G2 refill"
+   → Should become: "Uni Jetstream Refill SXR-600"
+
+7. "0.5mm Refill for Mitsubishi Jetstream Prime Pen SXR-200-05 (0.5mm) (D1 refill size)"
+   → Should become: "Uni Jetstream Prime Refill SXR-200-05"
+
+8. "0.7mm Refill for Mitsubishi Jetstream Prime Pen SXR-200-07 (0.7mm) (D1 refill size)"
+   → Should become: "Uni Jetstream Prime Refill SXR-200-07"
+
+9. "Refill for Mitsubishi Jetstream Pen SXR-5 (0.5mm) SXR-38 SXR-7Multi Function SXN-150 SXN-250"
+   → Should become: "Uni Jetstream Refill SXR-5"
+
+10. "Uni Mitsubishi Hi-Uni GRCT Mechanical Pencil Refill Leads 0.3/0.5 mm HU033002H HU03300H HU03300HB HU03300B"
+    → Should become: "Uni Hi-Uni GRCT Refill Leads HU03300"
+
+11. "Uni Mitsubishi Replacement Lead Refill 2.0mm ULN"
+    → Should become: "Uni Replacement Lead Refill 2.0mm ULN"
+
+12. "Refill for Jetstream Edge 0.28 mm SXR203-28"
+    → Should become: "Uni Jetstream Edge Refill SXR203-28"
+
+13. "Pilot Iroshizuku Fountain Pen Ink Cartridges Refill (6 Cartridges) 0.8 ml IRF-6S-AS"
+    → Should become: "Pilot Iroshizuku Ink Cartridges Refill IRF-6S-AS"
+
+14. "Pilot Neox Graphite Mechanical Pencil Refill 0.3/0.4/0.5/0.7/0.9mm HRFG-03-H -HB -B -2B HRFG-04-H -HB -B -2B HRFG-05-2H"
+    → Should become: "Pilot Neox Graphite Refill HRFG"
+
+15. "Refill for Mitsubishi Multi Function Jetstream Pen SXR-80-38 (0.38mm) Extra Fine"
+    → Should become: "Uni Jetstream Refill SXR-80-38"
+
+16. "Refill for Mitsubishi Multi Function Jetstream Pen SXR-80-10 (1.0mm)"
+    → Should become: "Uni Jetstream Refill SXR-80-10"
+
+17. "Uni Mitsubishi Field Architectural Mechanical Pencil Refill 2.0mm M20-700 1P"
+    → Should become: "Uni Field Architectural Refill 2.0mm M20-700"
+
+18. "Uni Mitsubishi Uniball ZENTO Gel Pen Refill 0.38/0.5mm UBRZ38.15 UBRZ38.24 UBRZ38 UBRZ05 UBRZ05.24"
+    → Should become: "Uni ZENTO Gel Pen Refill UBRZ38"
+
+19. "KOKUYO Dotliner Glue Tape Standard, Long, Hold (TA-DM400-08, TA-DM4400-10, TA-DM4200-08) (refill or tape set)"
+    → Should become: "Kokuyo Dotliner Glue Tape Refill TA-DM400"
+
+20. "Kokuyo Gloo Repositionable Adhesive Glue Tape Set Refill TA-GM410-07 GM400-08 G410-07 G400-08 GM411"
+    → Should become: "Kokuyo Gloo Glue Tape Refill TA-GM410"
+
+Key patterns:
+- "Refill for [Brand] [Product] [Code]" → "[Brand] [Product] Refill [Code]"
+- "[Brand] [BrandAlias] [Product] Refill [Code]" → "[Brand] [Product] Refill [Code]"
+- Need to preserve: brand, key product name (Jetstream, Airpress, Iroshizuku, ZENTO, etc.), and model code
+- Model codes: SXR-80-05, SXR-200-05, SXR-600-05, SXR-5, TA-DM400-08N, UL-S-0.3-25, etc.

@@ -1,0 +1,45 @@
+# Sales Dashboard TODO
+
+- [x] Database schema for sales_orders and uploaded_files tables
+- [x] Process and import all 44 Excel files into database
+- [x] Backend API: dashboard overview stats (total sales, orders, platforms, brands)
+- [x] Backend API: sales by day/week/month/year time series
+- [x] Backend API: sales by platform (Shopee vs Lazada)
+- [x] Backend API: sales by brand
+- [x] Backend API: top 50 items by quantity
+- [x] Backend API: top 50 items by value
+- [x] Backend API: global filter support (date range, platform, brand)
+- [x] Backend API: file upload for new Excel files (admin-only)
+- [x] Backend API: file import/parsing for uploaded files (admin-only)
+- [x] Frontend: DashboardLayout with sidebar navigation
+- [x] Frontend: Overview page with key metrics
+- [x] Frontend: Sales by time line charts (day/week/month/year)
+- [x] Frontend: Sales by platform bar chart
+- [x] Frontend: Sales by brand bar chart
+- [x] Frontend: Top 50 items by quantity table
+- [x] Frontend: Top 50 items by value table
+- [x] Frontend: Interactive global filters (date range, platform, brand)
+- [x] Frontend: File upload page (admin-only)
+- [x] Vitest tests for backend procedures
+- [x] Deploy and deliver
+- [x] Remove KPI cards (Total Sales, Total Orders, Units Sold, Active Days)
+- [x] Change main sales chart to stacked bar (Shopee bottom, Lazada top), default to month view
+- [x] Make dashboard fully mobile-responsive
+- [x] Add month/year toggle to the stacked bar chart
+- [x] Fix brand chart X-axis scale to properly accommodate highest value
+- [x] Create smart product name shortening function for Top 50 tables
+- [x] Unify Mitsubishi = Uni = Uniball under "Uni" in brand extraction
+- [x] Fix brand chart X-axis domain to dynamically recalculate after quick-filter buttons
+- [x] Fix shortenProductName for refill items to always include brand + product code/model
+- [x] Fix duplicate brand name issue (e.g. "Uni Uni") in shortened product names
+- [x] Fix shortenProductName for refill items to always include specific product name and model code
+- [x] Fix brand chart X-axis dynamic domain calculation to use actual filtered max value
+- [x] Add "All Time" button to quick filter row
+- [x] CRITICAL: Fix Sales by Brand chart X-axis domain — bars all max out at same length, domain not using actual data max
+- [x] Add shop attribution to sales and uploaded-file records, then backfill Japan Stationery data
+- [x] Import all validated Elite Camp Shopee and Lazada source files with Elite Camp attribution
+- [x] Add shop-aware dashboard filters and grouped stacked platform comparison APIs
+- [x] Update the dashboard with a shop filter and side-by-side shop/platform stacked bars
+- [x] Add a required shop selector and shop history column to the admin upload page
+- [x] Extend automated tests for shop filters, grouped platform data, and upload attribution
+- [x] Verify, checkpoint, and redeploy the two-shop dashboard

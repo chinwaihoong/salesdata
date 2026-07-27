@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1783755906828,
+      "tag": "0000_absurd_warhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1783755982593,
+      "tag": "0001_free_warstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1784957763771,
+      "tag": "0002_amused_bloodscream",
+      "breakpoints": true
+    }
+  ]
+}
