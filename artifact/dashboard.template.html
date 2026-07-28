@@ -156,6 +156,8 @@
   .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); }
   .legend span.item { display: inline-flex; align-items: center; gap: 6px; }
   .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  /* The total is a line, not a category — its swatch says so */
+  .legend i.line { width: 14px; height: 2px; border-radius: 1px; background: var(--ink); }
 
   .toggle { display: inline-flex; background: var(--chip); border-radius: 7px; padding: 2px; }
   .toggle button {
@@ -347,7 +349,7 @@
 (() => {
   // Bumped whenever the page markup/script changes, so a stale cached copy is
   // identifiable at a glance from the footer.
-  const BUILD = "last24-default";
+  const BUILD = "total-line";
   const D = JSON.parse(document.getElementById("data").textContent);
   const { months, shops, platforms, brands, products, agg, prod } = D;
   const latestMonth = months[months.length - 1];
@@ -478,10 +480,9 @@
     axisSvg.setAttribute("viewBox", `0 0 ${AXIS_W} ${H}`);
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
 
-    const maxVal = Math.max(...periods.map(p => {
-      const v = byPeriod.get(p);
-      return Math.max(v[0] + v[1], v[2] + v[3]);
-    }));
+    // Scale to the combined total, since the total line sits above both stacks
+    const periodTotal = p => byPeriod.get(p).reduce((s, n) => s + n, 0);
+    const maxVal = Math.max(...periods.map(periodTotal));
     const niceMax = (() => {
       const pow = Math.pow(10, Math.floor(Math.log10(maxVal || 1)));
       for (const m of [1, 2, 2.5, 5, 10]) if (m * pow >= maxVal) return m * pow;
@@ -550,7 +551,8 @@
             showTip(
               `<div class="t">${state.period === "year" ? p : monthLabel(p)}</div>` +
               `<div class="r"><span><i style="background:${c}"></i>${SERIES[si].label}</span><b>${fmtRM(v)}</b></div>` +
-              `<div class="r total"><span>${SERIES[si].shop} total</span><b>${fmtRM(stackTotal)}</b></div>`,
+              `<div class="r"><span>${SERIES[si].shop} total</span><b>${fmtRM(stackTotal)}</b></div>` +
+              `<div class="r total"><span>All shops total</span><b>${fmtRM(periodTotal(p))}</b></div>`,
               ev.clientX, ev.clientY);
           });
           rect.addEventListener("mouseleave", hideTip);
@@ -570,6 +572,20 @@
       }
     });
 
+    // Combined JS + EC total, on the same scale as the bars (never a second axis).
+    // Drawn last so it reads above the bars, with a surface-coloured halo so it
+    // stays legible where it crosses a stack.
+    const pts = periods.map((p, idx) => {
+      const cx = padL + groupW * idx + groupW / 2;
+      return `${cx},${y(periodTotal(p))}`;
+    }).join(" ");
+    for (const [stroke, width] of [["var(--surface)", 4.5], ["var(--ink)", 2]]) {
+      svg.appendChild(make("polyline", {
+        points: pts, fill: "none", stroke, "stroke-width": width,
+        "stroke-linejoin": "round", "stroke-linecap": "round",
+      }));
+    }
+
     // Open scrolled to the most recent periods
     const scroller = svg.parentElement;
     scroller.scrollLeft = scroller.scrollWidth;
@@ -586,6 +602,10 @@
       span.innerHTML = `<i style="background:var(${s.varName})"></i>${s.label}`;
       el.appendChild(span);
     }
+    const total = document.createElement("span");
+    total.className = "item";
+    total.innerHTML = `<i class="line"></i>Total`;
+    el.appendChild(total);
   }
 
   // ---- Trends (ignores date range by design) ----
