@@ -349,7 +349,7 @@
 (() => {
   // Bumped whenever the page markup/script changes, so a stale cached copy is
   // identifiable at a glance from the footer.
-  const BUILD = "total-line";
+  const BUILD = "jun26-complete";
   const D = JSON.parse(document.getElementById("data").textContent);
   const { months, shops, platforms, brands, products, agg, prod } = D;
   const latestMonth = months[months.length - 1];
@@ -813,7 +813,9 @@
   });
 
   document.getElementById("foot").textContent =
-    `Snapshot of ${fmtInt(agg.reduce((s, r) => s + r[6], 0))} order line items · data through ${D.lastDate || monthLabel(latestMonth)} · generated ${D.generatedAt} · build ${BUILD}`;
+    `Snapshot of ${fmtInt(agg.reduce((s, r) => s + r[6], 0))} order line items · complete months through ${monthLabel(latestMonth)}` +
+    (D.excludedMonth ? ` (${monthLabel(D.excludedMonth)} still in progress, not shown)` : "") +
+    ` · generated ${D.generatedAt} · build ${BUILD}`;
 
   // Open on the default range (falling back to All time if the preset is gone)
   const defaultRange = QUICK.find(q => q.label === DEFAULT_QUICK) || QUICK[0];

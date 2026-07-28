@@ -45,7 +45,7 @@ function unquote(v: string): string {
 
 type Row = { platform: string; orderDate: string; productName: string; brand: string; quantity: number; subtotal: number; shop: string };
 
-const rows: Row[] = [];
+let rows: Row[] = [];
 let bad = 0;
 for (const line of lines) {
   const m = line.match(/VALUES \((.*)\);\s*$/);
@@ -68,6 +68,18 @@ for (const line of lines) {
 }
 
 console.error(`parsed=${rows.length} bad=${bad}`);
+
+// Drop a trailing part-month so the dashboard never plots an incomplete period
+// against full ones. A month whose last sale lands before the 28th is treated
+// as still in progress; it returns automatically once the full export lands.
+const maxDate = rows.reduce((a, r) => (r.orderDate > a ? r.orderDate : a), "0000");
+let excludedMonth: string | null = null;
+if (Number(maxDate.slice(8)) < 28) {
+  excludedMonth = maxDate.slice(0, 7);
+  const before = rows.length;
+  rows = rows.filter(r => !r.orderDate.startsWith(excludedMonth!));
+  console.error(`excluded partial month ${excludedMonth}: dropped ${before - rows.length} rows`);
+}
 const totalSales = rows.reduce((s, r) => s + r.subtotal, 0);
 const totalQty = rows.reduce((s, r) => s + r.quantity, 0);
 console.error(`totalSales=${totalSales.toFixed(2)} totalQty=${totalQty} dateRange=${rows.reduce((a, r) => r.orderDate < a ? r.orderDate : a, "9999")}..${rows.reduce((a, r) => r.orderDate > a ? r.orderDate : a, "0000")}`);
@@ -121,6 +133,6 @@ const prod = Array.from(prodMap.entries()).map(([k, v]) => {
 });
 
 const lastDate = rows.reduce((a, r) => r.orderDate > a ? r.orderDate : a, "0000");
-const out = { generatedAt: new Date().toISOString().slice(0, 10), lastDate, months, shops, platforms, brands, products: productNames, agg, prod };
+const out = { generatedAt: new Date().toISOString().slice(0, 10), lastDate, excludedMonth, months, shops, platforms, brands, products: productNames, agg, prod };
 fs.writeFileSync("artifact/dashboard-data.json", JSON.stringify(out));
 console.error(`json bytes=${fs.statSync("artifact/dashboard-data.json").size}`);
