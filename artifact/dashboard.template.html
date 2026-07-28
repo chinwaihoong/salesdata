@@ -347,7 +347,7 @@
 (() => {
   // Bumped whenever the page markup/script changes, so a stale cached copy is
   // identifiable at a glance from the footer.
-  const BUILD = "frozen-axis-2";
+  const BUILD = "last24-default";
   const D = JSON.parse(document.getElementById("data").textContent);
   const { months, shops, platforms, brands, products, agg, prod } = D;
   const latestMonth = months[months.length - 1];
@@ -366,7 +366,7 @@
     from: "", to: "",
     shop: "all", platform: "all", brand: "all",
     period: "month",
-    quick: "All time",
+    quick: "", // set from DEFAULT_QUICK once the presets are built
     sortQty: { k: "qty", dir: -1 },
     sortVal: { k: "sales", dir: -1 },
   };
@@ -558,7 +558,8 @@
           acc += v;
         });
       }
-      if (idx % labelEvery === 0 || periods.length <= 14) {
+      // Space labels from the right so the newest period is always labelled
+      if ((periods.length - 1 - idx) % labelEvery === 0 || periods.length <= 14) {
         const t = make("text", {
           x: cx, y: H - padB + 14, "font-size": 10, fill: "var(--muted)",
           "text-anchor": periods.length > 14 ? "end" : "middle",
@@ -707,7 +708,11 @@
     { label: "Last 3 mo", from: shiftMonth(latestMonth, -2), to: latestMonth },
     { label: "Last 6 mo", from: shiftMonth(latestMonth, -5), to: latestMonth },
     { label: "Last 12 mo", from: shiftMonth(latestMonth, -11), to: latestMonth },
+    { label: "Last 24 mo", from: shiftMonth(latestMonth, -23), to: latestMonth },
   ];
+
+  // The view the dashboard opens on
+  const DEFAULT_QUICK = "Last 24 mo";
 
   function renderChips() {
     const el = document.getElementById("quickChips");
@@ -741,6 +746,7 @@
 
     const fromEl = document.getElementById("fromMonth"), toEl = document.getElementById("toMonth");
     fromEl.min = months[0]; fromEl.max = latestMonth; toEl.min = months[0]; toEl.max = latestMonth;
+    fromEl.value = state.from; toEl.value = state.to;
     fromEl.addEventListener("change", () => { state.from = fromEl.value; state.quick = ""; renderChips(); update(); });
     toEl.addEventListener("change", () => { state.to = toEl.value; state.quick = ""; renderChips(); update(); });
 
@@ -788,6 +794,12 @@
 
   document.getElementById("foot").textContent =
     `Snapshot of ${fmtInt(agg.reduce((s, r) => s + r[6], 0))} order line items · data through ${D.lastDate || monthLabel(latestMonth)} · generated ${D.generatedAt} · build ${BUILD}`;
+
+  // Open on the default range (falling back to All time if the preset is gone)
+  const defaultRange = QUICK.find(q => q.label === DEFAULT_QUICK) || QUICK[0];
+  state.quick = defaultRange.label;
+  state.from = defaultRange.from;
+  state.to = defaultRange.to;
 
   initSelectors();
   bindSort("topQtyTable", "sortQty");
