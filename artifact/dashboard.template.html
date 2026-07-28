@@ -164,9 +164,11 @@
   }
   .toggle button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
 
-  /* Frozen y-axis: the axis svg sits outside the scroller so it stays put */
+  /* Frozen y-axis: the axis svg sits outside the scroller so it stays put.
+     Width is pinned in CSS as well as on the element, so the column can never
+     collapse even before the chart script measures and draws. */
   .chart-wrap { display: flex; align-items: flex-start; }
-  #yAxis { display: block; flex: 0 0 auto; }
+  #yAxis { display: block; flex: 0 0 52px; width: 52px; height: 300px; }
   .chart-scroll { overflow-x: auto; flex: 1 1 auto; min-width: 0; }
   #mainChart { display: block; }
   #mainChart text, #yAxis text { font-family: inherit; }
@@ -216,7 +218,10 @@
 
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
   @media (max-width: 860px) { .grid-2 { grid-template-columns: 1fr; } }
-  .grid-2 .card { margin-top: 0; }
+  /* min-width:0 stops the wide nowrap tables from forcing the grid tracks
+     past 1fr, which used to push the whole page into horizontal scroll */
+  .grid-2 .card { margin-top: 0; min-width: 0; }
+  .card { min-width: 0; }
 
   .empty { padding: 40px 0; text-align: center; color: var(--muted); font-size: 13px; }
   footer { margin-top: 24px; color: var(--muted); font-size: 12px; text-align: center; }
@@ -340,6 +345,9 @@
 
 <script>
 (() => {
+  // Bumped whenever the page markup/script changes, so a stale cached copy is
+  // identifiable at a glance from the footer.
+  const BUILD = "frozen-axis-2";
   const D = JSON.parse(document.getElementById("data").textContent);
   const { months, shops, platforms, brands, products, agg, prod } = D;
   const latestMonth = months[months.length - 1];
@@ -779,7 +787,7 @@
   });
 
   document.getElementById("foot").textContent =
-    `Snapshot of ${fmtInt(agg.reduce((s, r) => s + r[6], 0))} order line items · data through ${D.lastDate || monthLabel(latestMonth)} · generated ${D.generatedAt}`;
+    `Snapshot of ${fmtInt(agg.reduce((s, r) => s + r[6], 0))} order line items · data through ${D.lastDate || monthLabel(latestMonth)} · generated ${D.generatedAt} · build ${BUILD}`;
 
   initSelectors();
   bindSort("topQtyTable", "sortQty");
