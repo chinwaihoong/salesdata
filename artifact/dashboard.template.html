@@ -164,9 +164,12 @@
   }
   .toggle button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
 
-  .chart-scroll { overflow-x: auto; }
+  /* Frozen y-axis: the axis svg sits outside the scroller so it stays put */
+  .chart-wrap { display: flex; align-items: flex-start; }
+  #yAxis { display: block; flex: 0 0 auto; }
+  .chart-scroll { overflow-x: auto; flex: 1 1 auto; min-width: 0; }
   #mainChart { display: block; }
-  #mainChart text { font-family: inherit; }
+  #mainChart text, #yAxis text { font-family: inherit; }
 
   /* Tooltip */
   .tip {
@@ -259,7 +262,10 @@
       </div>
     </div>
     <div class="legend" id="chartLegend" style="margin-bottom:10px"></div>
-    <div class="chart-scroll"><svg id="mainChart" role="img" aria-label="Stacked bar chart of sales by shop and platform over time"></svg></div>
+    <div class="chart-wrap">
+      <svg id="yAxis" aria-hidden="true"></svg>
+      <div class="chart-scroll"><svg id="mainChart" role="img" aria-label="Stacked bar chart of sales by shop and platform over time"></svg></div>
+    </div>
     <div class="empty" id="chartEmpty" hidden>No sales match the selected filters</div>
   </div>
 
@@ -424,8 +430,10 @@
 
   function renderChart(rows) {
     const svg = document.getElementById("mainChart");
+    const axisSvg = document.getElementById("yAxis");
     const empty = document.getElementById("chartEmpty");
     svg.innerHTML = "";
+    axisSvg.innerHTML = "";
 
     // Group rows by period → series values
     const byPeriod = new Map();
@@ -438,15 +446,28 @@
       byPeriod.get(p)[si] += r[4];
     }
     const periods = Array.from(byPeriod.keys()).sort();
-    if (periods.length === 0) { empty.hidden = false; svg.setAttribute("height", "0"); return; }
+    if (periods.length === 0) {
+      empty.hidden = false;
+      svg.setAttribute("height", "0");
+      axisSvg.setAttribute("height", "0");
+      axisSvg.setAttribute("width", "0");
+      return;
+    }
     empty.hidden = true;
 
+    // The y-axis lives in its own svg outside the scroller, so it stays visible
+    // no matter how far the plot is scrolled.
+    const AXIS_W = 52;
     const container = svg.parentElement.getBoundingClientRect();
-    const H = 300, padL = 52, padR = 8, padT = 10, padB = 44;
+    // padL leaves room for the first rotated x-label, which extends left of its bar
+    const H = 300, padL = 26, padR = 8, padT = 10, padB = 44;
     const minGroupW = state.period === "year" ? 70 : 34;
     const W = Math.max(container.width || 900, padL + padR + periods.length * minGroupW);
     svg.setAttribute("width", W);
     svg.setAttribute("height", H);
+    axisSvg.setAttribute("width", AXIS_W);
+    axisSvg.setAttribute("height", H);
+    axisSvg.setAttribute("viewBox", `0 0 ${AXIS_W} ${H}`);
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
 
     const maxVal = Math.max(...periods.map(p => {
@@ -467,17 +488,22 @@
       return e;
     };
 
-    // Gridlines + y labels
+    // Gridlines in the plot, tick labels in the frozen axis — same y() scale
     const ticks = 5;
     for (let i = 0; i <= ticks; i++) {
       const v = niceMax * i / ticks;
       const yy = y(v);
-      svg.appendChild(make("line", { x1: padL, x2: W - padR, y1: yy, y2: yy, stroke: "var(--grid)", "stroke-width": 1 }));
-      const t = make("text", { x: padL - 6, y: yy + 3.5, "text-anchor": "end", "font-size": 10, fill: "var(--muted)" });
+      svg.appendChild(make("line", { x1: 0, x2: W - padR, y1: yy, y2: yy, stroke: "var(--grid)", "stroke-width": 1 }));
+      const t = make("text", { x: AXIS_W - 6, y: yy + 3.5, "text-anchor": "end", "font-size": 10, fill: "var(--muted)" });
       t.textContent = fmtRM0(v);
-      svg.appendChild(t);
+      axisSvg.appendChild(t);
     }
-    svg.appendChild(make("line", { x1: padL, x2: W - padR, y1: y(0), y2: y(0), stroke: "var(--baseline)", "stroke-width": 1 }));
+    svg.appendChild(make("line", { x1: 0, x2: W - padR, y1: y(0), y2: y(0), stroke: "var(--baseline)", "stroke-width": 1 }));
+    // Hairline separating the frozen axis from the scrolling plot
+    axisSvg.appendChild(make("line", {
+      x1: AXIS_W - 0.5, x2: AXIS_W - 0.5, y1: padT, y2: y(0),
+      stroke: "var(--baseline)", "stroke-width": 1,
+    }));
 
     const plotW = W - padL - padR;
     const groupW = plotW / periods.length;
