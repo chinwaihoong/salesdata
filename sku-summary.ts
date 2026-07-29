@@ -16,7 +16,10 @@ import * as XLSX from "xlsx";
 
 const RAW = process.env.RAW_DIR!;
 const OUT = process.env.OUT_DIR!;
-const FROM = "2025-07-01", TO = "2026-06-30";
+const FROM = process.env.FROM ?? "2025-07-01";
+const TO = process.env.TO ?? "2026-06-30";
+// Output basename, e.g. "sku-sales-summary-12m" -> .csv + .xlsx
+const NAME = process.env.NAME ?? "sku-sales-summary-12m";
 
 type Line = {
   sku: string; product: string; variant: string; shop: string; platform: string;
@@ -170,7 +173,7 @@ for (const a of rows) {
     a.orders.size, a.first, a.last, a.products.size,
   ].join(","));
 }
-fs.writeFileSync(path.join(OUT, "sku-sales-summary-12m.csv"), csv.join("\n") + "\n");
+fs.writeFileSync(path.join(OUT, `${NAME}.csv`), csv.join("\n") + "\n");
 
 const totUnits = rows.reduce((s, a) => s + a.units, 0);
 const totRev = rows.reduce((s, a) => s + a.revenue, 0);
@@ -208,7 +211,7 @@ const totSheet = XLSX.utils.aoa_to_sheet([
 ]);
 totSheet["!cols"] = [{ wch: 34 }, { wch: 40 }];
 XLSX.utils.book_append_sheet(wb, totSheet, "Total");
-XLSX.writeFile(wb, path.join(OUT, "sku-sales-summary-12m.xlsx"));
+XLSX.writeFile(wb, path.join(OUT, `${NAME}.xlsx`));
 console.log(JSON.stringify({
   window: [FROM, TO],
   sourceLines: lines.length,
